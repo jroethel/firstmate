@@ -1,4 +1,4 @@
-/* LCARS board theme.
+/* stng-lcars board theme.
    Palette: a design scout's Canon palette, after common TNG LCARS fan references and not an official spec,
    with a light and a dark value for every role.
    Fonts, shipped unmodified in fonts/ under the SIL Open Font License 1.1 (full texts in fonts/LICENSE):
@@ -6,7 +6,7 @@
      AtkinsonHyperlegibleNext-Regular-Latin.woff2 and AtkinsonHyperlegibleNext-SemiBold-Latin.woff2
        from @fontsource/atkinson-hyperlegible-next@5.3.0, Copyright 2020-2024 The Atkinson Hyperlegible Next Project Authors
    The file has three parts: type and palette (this theme's own), the board's token mapping, and the frame,
-   which reads only the --th-* properties and is the same text as the Restrained theme's. */
+   which reads only the --th-* properties and is the same text as the stng theme's. */
 
 @font-face { font-family: "Antonio"; font-weight: 100 700; src: url("fonts/antonio-latin.woff2") format("woff2"); }
 @font-face { font-family: "Atkinson Hyperlegible Next"; font-weight: 100 500; src: url("fonts/AtkinsonHyperlegibleNext-Regular-Latin.woff2") format("woff2"); }
