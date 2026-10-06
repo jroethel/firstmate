@@ -188,6 +188,11 @@ extract_payload() {  # <board-path>
     | sed '1d;$d'
 }
 
+write_home_theme() {  # <home> <name> <css>
+  mkdir -p "$1/config/themes/$2"
+  printf '%s\n' "$3" > "$1/config/themes/$2/theme.css"
+}
+
 test_path_is_stable_and_home_scoped() {
   local home
   home=$(make_home path)
@@ -769,6 +774,125 @@ test_build_refuses_a_nondecision_reconcile_value() {
   pass "build reserves reconcile across non-decision cards"
 }
 
+test_build_without_a_selection_carries_no_theme() {
+  local home data board
+  home=$(make_home no-theme)
+  data="$home/payload.json"
+  board="$home/.lavish/bearings-board.html"
+  write_valid_payload "$data"
+  run_board "$home" build "$data" >/dev/null || fail "a valid payload did not build without a theme"
+  assert_no_grep '<style id="bb-theme">' "$board" "a board with no selection carried a theme block"
+  grep -qxF '__FM_BEARINGS_BOARD_THEME__' "$board" && fail "the theme slot survived a build with no selection"
+  grep -F '<html' "$board" | grep -qE 'data-(theme|layout|mode)=' \
+    && fail "a board with no selection declared a theme, layout, or mode on its root"
+  pass "a build with no selection carries no theme block and no root selection"
+}
+
+test_build_applies_a_home_theme_selection() {
+  local home data board css block
+  home=$(make_home home-theme)
+  data="$home/payload.json"
+  board="$home/.lavish/bearings-board.html"
+  write_valid_payload "$data"
+  write_home_theme "$home" fixture ':root { --bg-page: light-dark(#ffffff, #000000); }'
+  printf 'theme=fixture\nlayout=full\nmode=dark\n' > "$home/config/theme"
+  run_board "$home" build "$data" >/dev/null || fail "a valid home theme selection did not build"
+  grep -F '<html' "$board" | grep -qF 'data-theme="fixture" data-layout="full" data-mode="dark"' \
+    || fail "the page root does not declare the selected theme, layout, and mode"
+  [ "$(grep -cF '<style id="bb-theme">' "$board")" = 1 ] || fail "the theme block is not carried exactly once"
+  css=$(FM_HOME="$home" "$ROOT/bin/fm-theme.sh" css) || fail "the fixture theme did not resolve"
+  block=$(sed -n '/<style id="bb-theme">/,/<\/style>/p' "$board" | sed '1d;$d')
+  [ "$block" = "$css" ] || fail "the theme block is not the resolved stylesheet"
+  assert_no_grep '@import' "$board" "a themed board still imports the default fonts"
+  [ "$(grep -cF '<script id="bearings-data"' "$board")" = 1 ] || fail "the data block is not carried exactly once"
+  extract_payload "$board" | jq -e '.schema == "fm-bearings-board.v1"' >/dev/null \
+    || fail "the themed board's data block does not parse"
+  pass "a home theme selection sets the page root and carries the resolved stylesheet exactly once"
+}
+
+test_build_switches_theme_in_place_on_rebuild() {
+  local home data board out
+  home=$(make_home theme-switch)
+  data="$home/payload.json"
+  board="$home/.lavish/bearings-board.html"
+  write_valid_payload "$data"
+  run_board "$home" build "$data" >/dev/null || fail "the unthemed first build failed"
+  write_home_theme "$home" fixture ':root { --bg-page: light-dark(#ffffff, #000000); }'
+  printf 'theme=fixture\nmode=light\n' > "$home/config/theme"
+  out=$(run_board "$home" build "$data") || fail "the themed rebuild failed"
+  assert_contains "$out" "board: $board" "the rebuild did not rewrite the same board path: $out"
+  assert_contains "$out" "already-armed: " "the rebuild did not keep the same board source: $out"
+  grep -F '<html' "$board" | grep -qF 'data-theme="fixture" data-layout="compact" data-mode="light"' \
+    || fail "the rebuilt board does not declare the new selection"
+  pass "changing the selection and rebuilding rewrites the same board in the new theme"
+}
+
+test_build_refuses_an_unknown_theme_and_writes_nothing() {
+  local home data rc out
+  home=$(make_home unknown-theme)
+  data="$home/payload.json"
+  write_valid_payload "$data"
+  mkdir -p "$home/config"
+  printf 'theme=nowhere\n' > "$home/config/theme"
+  set +e; out=$(run_board "$home" build "$data" 2>&1); rc=$?; set -e
+  [ "$rc" -ne 0 ] || fail "a selection naming no existing theme was accepted"
+  assert_contains "$out" "nowhere" "the refusal did not name the missing theme"
+  assert_contains "$out" "$home/config/themes" "the refusal did not name the home themes folder"
+  assert_contains "$out" "$ROOT/.agents/skills/bearings/assets/themes" "the refusal did not name the shipped themes folder"
+  assert_absent "$home/.lavish/bearings-board.html" "a refused selection still produced a board"
+  pass "build refuses a selection naming a missing theme and writes nothing"
+}
+
+test_build_refuses_an_unsafe_home_theme_and_writes_nothing() {
+  local home data rc out bad
+  home=$(make_home unsafe-theme)
+  data="$home/payload.json"
+  write_valid_payload "$data"
+  mkdir -p "$home/config"
+  printf 'theme=fixture\n' > "$home/config/theme"
+  for bad in '</style><script>alert(1)</script>' '@import url(https://example.invalid/x.css);'; do
+    write_home_theme "$home" fixture "$bad"
+    set +e; out=$(run_board "$home" build "$data" 2>&1); rc=$?; set -e
+    [ "$rc" -ne 0 ] || fail "an unsafe home theme was accepted: $bad"
+    assert_absent "$home/.lavish/bearings-board.html" "a refused home theme still produced a board: $bad"
+  done
+  pass "build refuses a home theme that could escape the page or fetch remotely, and writes nothing"
+}
+
+test_build_applies_every_shipped_theme_in_every_combination() {
+  local home data board shipped dir name layout mode css block count=0
+  home=$(make_home every-theme)
+  data="$home/payload.json"
+  board="$home/.lavish/bearings-board.html"
+  write_valid_payload "$data"
+  shipped="$ROOT/.agents/skills/bearings/assets/themes"
+  mkdir -p "$home/config"
+  for dir in "$shipped"/*/; do
+    [ -f "$dir/theme.css" ] || continue
+    name=$(basename "$dir")
+    for layout in full compact; do
+      for mode in light dark; do
+        count=$((count + 1))
+        printf 'theme=%s\nlayout=%s\nmode=%s\n' "$name" "$layout" "$mode" > "$home/config/theme"
+        run_board "$home" build "$data" >/dev/null || fail "$name $layout $mode did not build"
+        grep -F '<html' "$board" | grep -qF "data-theme=\"$name\" data-layout=\"$layout\" data-mode=\"$mode\"" \
+          || fail "$name $layout $mode: the page root does not declare the selection"
+        [ "$(grep -cF '<style id="bb-theme">' "$board")" = 1 ] \
+          || fail "$name $layout $mode: the theme block is not carried exactly once"
+        css=$(FM_HOME="$home" FM_CONFIG_OVERRIDE='' "$ROOT/bin/fm-theme.sh" css) || fail "$name did not resolve"
+        block=$(sed -n '/<style id="bb-theme">/,/<\/style>/p' "$board" | sed '1d;$d')
+        [ "$block" = "$css" ] || fail "$name $layout $mode: the theme block is not the resolved stylesheet"
+        [ "$(grep -cF '<script id="bearings-data"' "$board")" = 1 ] \
+          || fail "$name $layout $mode: the data block is not carried exactly once"
+        extract_payload "$board" | jq -e '.schema == "fm-bearings-board.v1"' >/dev/null \
+          || fail "$name $layout $mode: the data block does not parse"
+      done
+    done
+  done
+  [ "$count" -ge 4 ] || fail "no shipped theme was exercised"
+  pass "every shipped theme builds in every layout and mode with its styles and data exactly once"
+}
+
 test_path_is_stable_and_home_scoped
 test_build_refuses_malformed_payloads_before_touching_the_board
 test_charted_kind_is_optional_and_accepts_both_values
@@ -787,3 +911,9 @@ test_build_fails_when_reconcile_cannot_establish_a_listener
 test_every_decision_card_carries_the_reconcile_choice
 test_build_refuses_a_payload_that_occupies_the_reconcile_value
 test_build_refuses_a_nondecision_reconcile_value
+test_build_without_a_selection_carries_no_theme
+test_build_applies_a_home_theme_selection
+test_build_switches_theme_in_place_on_rebuild
+test_build_refuses_an_unknown_theme_and_writes_nothing
+test_build_refuses_an_unsafe_home_theme_and_writes_nothing
+test_build_applies_every_shipped_theme_in_every_combination

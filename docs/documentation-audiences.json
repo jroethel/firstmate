@@ -541,6 +541,30 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/briefs/2026-10-05.I1.theming-surface-brief.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/loop/conventions.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/loop/pointer.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/plans/2026-10-05.I1.theming-surface-plan.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/plans/2026-10-05.I1.theming-surface-plan_loop.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/reviews/2026-10-05.I1.theming-surface-batch-review.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "skills/stow/SKILL.md",
       "audience": "public-product"
     },

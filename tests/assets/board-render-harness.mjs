@@ -5,7 +5,10 @@
 // Usage: node board-render-harness.mjs <built-board.html>
 // Prints one JSON document:
 //   { stats:[{n,label}], underway:[{title,sub,badges}],
-//     charted:[{title,sub,badges,pickable}], empty, more, error }
+//     charted:[{title,sub,badges,pickable}], empty, more, error,
+//     root:{theme?,layout?,mode?}, switches:{shown,layout,mode} }
+// root holds the page root's data- selection attributes after the script ran;
+// switches say whether each in-page switch is present and not hidden.
 import { readFileSync } from "node:fs";
 
 const html = readFileSync(process.argv[2], "utf8");
@@ -37,6 +40,9 @@ class Node {
   set textContent(v) { this._text = String(v); this.children = []; }
   appendChild(n) { n.parentNode = this; this.children.push(n); return n; }
   setAttribute(k, v) { this.attributes[k] = v; }
+  getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attributes, k) ? this.attributes[k] : null; }
+  hasAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attributes, k); }
+  removeAttribute(k) { delete this.attributes[k]; }
   addEventListener() {}
   querySelectorAll(sel) {
     const want = sel.replace(/^\./, "").replace(/:checked$/, "");
@@ -60,7 +66,14 @@ dataNode.textContent = html
   .split("</script>")[0];
 byId.set("bearings-data", dataNode);
 
+// The page root, seeded from the built page so the switch script sees the
+// theme, layout, and mode attributes the build wrote.
+const rootNode = new Node("html");
+const rootTag = (html.match(/<html\b([^>]*)>/) || ["", ""])[1];
+for (const m of rootTag.matchAll(/([a-z-]+)="([^"]*)"/g)) rootNode.setAttribute(m[1], m[2]);
+
 globalThis.document = {
+  documentElement: rootNode,
   createElement: (tag) => new Node(tag),
   // Lazily mint any element the page asks for: the shim tracks whatever ids
   // the shipped template actually uses instead of pinning a fixed list.
@@ -122,5 +135,12 @@ const errorText = [...byId.entries()]
 const empty = ch.children.filter((c) => c.className.includes("bb-empty")).map((c) => c.textContent);
 const more = ch.children.filter((c) => c.className.includes("bb-morechip")).map((c) => c.textContent);
 
+const root = {};
+for (const k of ["theme", "layout", "mode"]) {
+  if (rootNode.hasAttribute("data-" + k)) root[k] = rootNode.getAttribute("data-" + k);
+}
+const shown = (id) => byId.has(id) && !byId.get(id).hidden;
+const switches = { shown: shown("bb-switches"), layout: shown("bb-switch-layout"), mode: shown("bb-switch-mode") };
+
 process.stdout.write(
-  JSON.stringify({ stats, underway, charted, empty, more, error: errorText }) + "\n");
+  JSON.stringify({ stats, underway, charted, empty, more, error: errorText, root, switches }) + "\n");

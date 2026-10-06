@@ -5,6 +5,7 @@
 #
 # Coverage:
 #   - absent-file markers vs empty-but-present files in the context digest
+#   - the optional theme line at the top of the context digest
 #   - the lock-refusal read-only path: banner leads, every mutating step is
 #     skipped (including bootstrap's seven mutating sweeps, verified by their
 #     ABSENCE), the digest still completes
@@ -812,6 +813,50 @@ EOF
   assert_contains "$cap_section" "(present, empty)" "empty-but-present captain.md was not distinguished from ABSENT"
 
   pass "context digest distinguishes ABSENT, empty-but-present, and populated files"
+}
+
+test_theme_line_follows_the_home_selection() {
+  local rec root home fakebin out
+  rec=$(new_world theme-none)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_not_contains "$out" "THEME:" "a home with no theme selection printed a theme line"
+
+  rec=$(new_world theme-voice)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  mkdir -p "$home/config/themes/fixture"
+  printf ':root { color-scheme: light dark; }\n' > "$home/config/themes/fixture/theme.css"
+  printf 'Captain, steady as she goes.\n' > "$home/config/themes/fixture/noop-reply"
+  printf 'theme=fixture\n' > "$home/config/theme"
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "THEME: fixture; no-op reply: Captain, steady as she goes.; fleet-page stylesheet: $home/.lavish/fleet-theme.css" \
+    "a theme naming a no-op reply did not put it in the digest"
+  assert_present "$home/.lavish/fleet-theme.css" "the digest named a fleet-page stylesheet it did not write"
+  [ "$(printf '%s\n' "$out" | grep -n '^THEME: ' | cut -d: -f1)" -lt "$(printf '%s\n' "$out" | grep -n '^FLEET STATE$' | cut -d: -f1)" ] \
+    || fail "the theme line does not come before the fleet state, where tail truncation could drop it"
+
+  rec=$(new_world theme-default-voice)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  mkdir -p "$home/config/themes/fixture"
+  printf ':root { color-scheme: light dark; }\n' > "$home/config/themes/fixture/theme.css"
+  printf 'theme=fixture\n' > "$home/config/theme"
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "THEME: fixture; no-op reply: Captain, shipshape.; fleet-page stylesheet: $home/.lavish/fleet-theme.css" \
+    "a theme naming no no-op reply did not leave the default in the digest"
+
+  pass "the digest's early theme line follows the home's selection and names the theme's no-op reply"
 }
 
 # --- lock refusal: read-only path --------------------------------------------
@@ -3015,6 +3060,7 @@ EOF
 }
 
 test_context_digest_absent_empty_present
+test_theme_line_follows_the_home_selection
 test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path
 test_trace_context_effective_state_is_frozen_after_lock

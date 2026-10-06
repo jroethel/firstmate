@@ -459,6 +459,34 @@ test_changed_bin_reference_selects_per_script_not_per_family() {
   pass "a bin reference selects the referencing scripts, and consumers still select their curated families"
 }
 
+test_changed_board_assets_select_the_board_and_theme_suites() {
+  local tmp repo listed script
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-board-assets.XXXXXX")
+  repo="$tmp/repo"
+  init_changed_fixture_repo "$repo"
+  for script in fm-bearings-board.test.sh fm-bearings-board-render.test.sh fm-theme.test.sh; do
+    printf '#!/usr/bin/env bash\n' >"$repo/tests/$script"
+  done
+  mkdir -p "$repo/.agents/skills/bearings/assets/themes/demo/fonts" "$repo/tests/assets"
+  : >"$repo/.agents/skills/bearings/assets/board-template.html"
+  : >"$repo/.agents/skills/bearings/assets/themes/demo/theme.css"
+  : >"$repo/.agents/skills/bearings/assets/themes/demo/fonts/LICENSE"
+  : >"$repo/tests/assets/board-render-harness.mjs"
+  git -C "$repo" add .
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm board-assets
+
+  printf '\n' >>"$repo/.agents/skills/bearings/assets/themes/demo/fonts/LICENSE"
+  printf '\n' >>"$repo/tests/assets/board-render-harness.mjs"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD 2>&1) \
+    || { rm -rf "$tmp"; fail "a board asset change had no changed-test mapping: $listed"; }
+  assert_contains "$listed" "tests/fm-bearings-board.test.sh" "a board asset change must select the build suite"
+  assert_contains "$listed" "tests/fm-bearings-board-render.test.sh" "a board asset change must select the render suite"
+  assert_contains "$listed" "tests/fm-theme.test.sh" "a board asset change must select the theme suite"
+
+  rm -rf "$tmp"
+  pass "board template, theme, and render-harness changes select the board and theme suites"
+}
+
 # Exercise begin/end markers from real fixture processes to prove the automatic
 # changed-suite default and its explicit serial override.
 test_changed_uses_bounded_automatic_concurrency() {
@@ -1835,6 +1863,7 @@ test_changed_runner_surfaces_select_their_family
 test_shell_line_ending_policy_selects_runner_contract
 test_changed_dependency_selection_and_unmapped_failure
 test_changed_bin_reference_selects_per_script_not_per_family
+test_changed_board_assets_select_the_board_and_theme_suites
 test_changed_uses_bounded_automatic_concurrency
 test_windows_posix_mode_emulation_does_not_fail_parallel_runs
 test_script_list_uses_bounded_automatic_concurrency

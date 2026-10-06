@@ -45,7 +45,10 @@
 #   4. supervision-instructions - the one emitted operating block for the
 #                       detected primary harness.
 #   5. read-once contract - the do-not-re-read contract covering every source
-#                       represented by the two digests below.
+#                       represented by the two digests below, then the optional
+#                       THEME section from `bin/fm-theme.sh digest-line`, early
+#                       so tail truncation never drops it, with `--read-only`
+#                       in a lock-refused session.
 #   6. fleet digest   - a compact data/backlog.md identity/metadata listing,
 #                       every state/*.meta, a bounded state/*.status tail,
 #                       the away posture (state/.afk-contract and the legacy
@@ -877,6 +880,15 @@ Go to a source directly only when:
   - or a STARTUP TRUNCATED banner named the stage that would have printed it, in
     which case that stage's sources were never emitted and must be reconciled.
 EOF
+if [ "$READ_ONLY" -eq 1 ]; then
+  theme_line=$(FM_HOME="$FM_HOME" FM_CONFIG_OVERRIDE="$CONFIG" "$SCRIPT_DIR/fm-theme.sh" digest-line --read-only 2>/dev/null || true)
+else
+  theme_line=$(FM_HOME="$FM_HOME" FM_CONFIG_OVERRIDE="$CONFIG" "$SCRIPT_DIR/fm-theme.sh" digest-line 2>/dev/null || true)
+fi
+if [ -n "$theme_line" ]; then
+  section "THEME"
+  printf '%s\n' "$theme_line"
+fi
 
 # --- 6. fleet-state digest ---------------------------------------------
 # Before CONTEXT: see this file's ORDERING note. Live fleet identity is what a

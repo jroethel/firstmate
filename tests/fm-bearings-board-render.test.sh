@@ -266,6 +266,63 @@ test_charted_rows_without_a_filed_date_follow_the_dated_rows_in_payload_order() 
   pass "charted rows with no filed date follow the dated rows in payload order"
 }
 
+test_a_board_with_no_selection_shows_no_switches() {
+  local home out
+  home=$(make_home no-selection)
+  out=$(render "$home" '[]')
+  printf '%s' "$out" | jq -e '
+    .error == "" and .root == {} and .switches == {shown: false, layout: false, mode: false}
+      and ([.stats[] | .label] == ["need you", "underway", "landed recently", "charted next"])
+  ' >/dev/null || fail "a board with no selection changed its root or showed a switch: $out"
+  pass "a board with no selection keeps a bare root and shows no layout or mode switch"
+}
+
+test_a_layout_only_selection_shows_the_layout_switch() {
+  local home out
+  home=$(make_home layout-only)
+  mkdir -p "$home/config"
+  printf 'layout=full\nmode=dark\n' > "$home/config/theme"
+  out=$(render "$home" '[]')
+  printf '%s' "$out" | jq -e '
+    .error == "" and .root == {layout: "full", mode: "dark"}
+      and .switches == {shown: true, layout: true, mode: false}
+  ' >/dev/null || fail "a layout-only selection did not show exactly the layout switch: $out"
+  pass "a selection naming no theme shows the layout switch and hides the mode switch"
+}
+
+test_a_theme_selection_shows_both_switches() {
+  local home out
+  home=$(make_home theme-switches)
+  mkdir -p "$home/config/themes/fixture"
+  printf ':root { --bg-page: light-dark(#ffffff, #000000); }\n' > "$home/config/themes/fixture/theme.css"
+  printf 'theme=fixture\n' > "$home/config/theme"
+  out=$(render "$home" '[]')
+  printf '%s' "$out" | jq -e '
+    .error == "" and .root == {theme: "fixture", layout: "compact", mode: "auto"}
+      and .switches == {shown: true, layout: true, mode: true}
+  ' >/dev/null || fail "a theme selection did not start from the home default with both switches: $out"
+  pass "a theme selection starts from the home default and shows both switches"
+}
+
+test_a_root_missing_its_selection_attributes_still_renders() {
+  local home out board
+  home=$(make_home partial-root)
+  mkdir -p "$home/config/themes/fixture"
+  printf ':root { --bg-page: light-dark(#ffffff, #000000); }\n' > "$home/config/themes/fixture/theme.css"
+  printf 'theme=fixture\n' > "$home/config/theme"
+  render "$home" '[]' >/dev/null
+  board="$home/.lavish/bearings-board.html"
+  sed -e 's/ data-layout="[a-z]*"//' -e 's/ data-mode="[a-z]*"//' "$board" > "$home/partial.html"
+  out=$(node "$HARNESS" "$home/partial.html") \
+    || fail "a board whose root lacks its layout and mode could not be rendered"
+  printf '%s' "$out" | jq -e '
+    .error == "" and .root == {theme: "fixture"}
+      and .switches == {shown: false, layout: false, mode: false}
+      and ([.stats[] | .label] == ["need you", "underway", "landed recently", "charted next"])
+  ' >/dev/null || fail "a root missing its layout and mode broke the board or showed a switch: $out"
+  pass "a root missing its layout and mode attributes still renders the board and shows no switch"
+}
+
 test_an_underway_row_leads_with_the_task_name_and_keeps_its_run_status
 test_an_underway_identifier_label_is_not_replaced_by_run_status
 test_charted_next_reads_newest_filed_first
@@ -275,3 +332,7 @@ test_warnings_are_excluded_from_the_charted_next_count
 test_a_board_of_only_warnings_still_reports_nothing_queued
 test_omitted_warnings_never_count_as_more_queued
 test_an_omitted_kind_keeps_the_existing_queued_rendering
+test_a_board_with_no_selection_shows_no_switches
+test_a_layout_only_selection_shows_the_layout_switch
+test_a_theme_selection_shows_both_switches
+test_a_root_missing_its_selection_attributes_still_renders

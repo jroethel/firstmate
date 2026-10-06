@@ -85,6 +85,17 @@
 # every `<` in the compact JSON as the \u003c string escape, so a payload string
 # containing "</script>" can never terminate the data block early.
 #
+# THEME. The board follows this home's optional config/theme selection, read
+# through bin/fm-theme.sh, which owns the selection format and every refusal.
+# With no config/theme file the resolver is never called: the template's theme
+# slot line is deleted and the page root and fonts are left exactly as shipped.
+# With a selection, the page root gains data-layout and data-mode, plus
+# data-theme when a theme is named. A named theme's resolved stylesheet replaces
+# the theme slot line as a `<style id="bb-theme">` block and the template's own
+# @import lines are dropped, so the themed board fetches nothing remote. A
+# selection the resolver refuses, or a template without exactly one theme slot
+# line and one root line, stops the build before the board is touched.
+#
 # FM_BEARINGS_BOARD_TEMPLATE overrides the shipped template path (tests only).
 set -eu
 
@@ -94,6 +105,8 @@ FM_HOME="${FM_HOME:-$FM_ROOT}"
 
 TEMPLATE="${FM_BEARINGS_BOARD_TEMPLATE:-$SCRIPT_DIR/../.agents/skills/bearings/assets/board-template.html}"
 PLACEHOLDER='__FM_BEARINGS_BOARD_DATA__'
+THEME_PLACEHOLDER='__FM_BEARINGS_BOARD_THEME__'
+ROOT_LINE='<html lang="en">'
 BOARD_SCHEMA=fm-bearings-board.v1
 
 usage() {
@@ -357,6 +370,35 @@ await_source_owner() {  # <source-id>
   printf '%s\n' "${owner:-none}"
 }
 
+THEME_CSS_FILE=
+
+# Resolve the home's theme selection into BOARD_THEME_NAME, BOARD_ROOT_NEW, and
+# THEME_CSS_FILE (a private temp file removed on every exit path), or leave them
+# empty when the home carries no selection.
+resolve_theme() {
+  local selection layout mode
+  BOARD_THEME_NAME=
+  BOARD_ROOT_NEW=
+  [ -e "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/theme" ] || return 0
+  selection=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-theme.sh" selection) \
+    || fail "cannot apply this home's theme selection"
+  [ -n "$selection" ] || return 0
+  [ "$(grep -cxF "$ROOT_LINE" "$TEMPLATE")" -eq 1 ] \
+    || fail "board template does not carry exactly one root line: $TEMPLATE"
+  BOARD_THEME_NAME=$(printf '%s\n' "$selection" | sed -n 's/^theme=//p')
+  layout=$(printf '%s\n' "$selection" | sed -n 's/^layout=//p')
+  mode=$(printf '%s\n' "$selection" | sed -n 's/^mode=//p')
+  BOARD_ROOT_NEW='<html lang="en"'
+  [ -z "$BOARD_THEME_NAME" ] || BOARD_ROOT_NEW="$BOARD_ROOT_NEW data-theme=\"$BOARD_THEME_NAME\""
+  BOARD_ROOT_NEW="$BOARD_ROOT_NEW data-layout=\"$layout\" data-mode=\"$mode\">"
+  [ -n "$BOARD_THEME_NAME" ] || return 0
+  THEME_CSS_FILE=$(umask 077; mktemp "${TMPDIR:-/tmp}/fm-bearings-theme.XXXXXX") \
+    || fail "cannot stage the board theme"
+  trap 'rm -f -- "$THEME_CSS_FILE"' EXIT
+  FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-theme.sh" css > "$THEME_CSS_FILE" \
+    || fail "cannot apply this home's theme selection"
+}
+
 command_build() {
   local data=${1-} board json tmp sid extracted effective owner version pre_reopen_owner
   [ "$#" -eq 1 ] || { usage >&2; exit 2; }
@@ -367,6 +409,9 @@ command_build() {
   [ -f "$TEMPLATE" ] && [ ! -L "$TEMPLATE" ] || fail "board template is missing: $TEMPLATE"
   [ "$(grep -cxF "$PLACEHOLDER" "$TEMPLATE")" -eq 1 ] \
     || fail "board template does not carry exactly one data slot: $TEMPLATE"
+  [ "$(grep -cxF "$THEME_PLACEHOLDER" "$TEMPLATE")" -eq 1 ] \
+    || fail "board template does not carry exactly one theme slot: $TEMPLATE"
+  resolve_theme
 
   effective=$(umask 077; mktemp "${TMPDIR:-/tmp}/fm-bearings-payload.XXXXXX") \
     || fail "cannot stage the board payload"
@@ -383,13 +428,38 @@ command_build() {
   board=$(board_path)
   (umask 077; mkdir -p "${board%/*}") || fail "cannot create ${board%/*}"
   tmp=$(umask 077; mktemp "${board%/*}/.board.XXXXXX") || fail "cannot stage the board"
-  if ! BOARD_JSON="$json" perl -pe "s/^\\Q$PLACEHOLDER\\E\$/\$ENV{BOARD_JSON}/" "$TEMPLATE" > "$tmp"; then
+  if ! BOARD_JSON="$json" BOARD_DATA_SLOT="$PLACEHOLDER" BOARD_THEME_SLOT="$THEME_PLACEHOLDER" \
+    BOARD_ROOT_OLD="$ROOT_LINE" BOARD_ROOT_NEW="$BOARD_ROOT_NEW" BOARD_THEME_NAME="$BOARD_THEME_NAME" \
+    BOARD_THEME_CSS_FILE="$THEME_CSS_FILE" perl -pe '
+      BEGIN {
+        if (length $ENV{BOARD_THEME_CSS_FILE}) {
+          open(my $fh, "<", $ENV{BOARD_THEME_CSS_FILE}) or die "cannot read the theme stylesheet\n";
+          local $/;
+          $css = <$fh>;
+          close($fh);
+          $css .= "\n" unless $css =~ /\n\z/;
+        }
+      }
+      if (defined $css && /^\@import /) {
+        $_ = "";
+      } elsif (/^\Q$ENV{BOARD_DATA_SLOT}\E$/) {
+        s/^\Q$ENV{BOARD_DATA_SLOT}\E$/$ENV{BOARD_JSON}/;
+      } elsif (/^\Q$ENV{BOARD_THEME_SLOT}\E$/) {
+        $_ = defined $css ? "<style id=\"bb-theme\">\n$css</style>\n" : "";
+      } elsif (length $ENV{BOARD_ROOT_NEW} && /^\Q$ENV{BOARD_ROOT_OLD}\E$/) {
+        $_ = "$ENV{BOARD_ROOT_NEW}\n";
+      }
+    ' "$TEMPLATE" > "$tmp"; then
     rm -f -- "$tmp"
     fail "cannot inject the board data"
   fi
   if grep -qxF "$PLACEHOLDER" "$tmp"; then
     rm -f -- "$tmp"
     fail "the board data slot survived injection"
+  fi
+  if grep -qxF "$THEME_PLACEHOLDER" "$tmp"; then
+    rm -f -- "$tmp"
+    fail "the board theme slot survived injection"
   fi
   # Round-trip the injected payload back out of the built page, so a board that
   # would fail to parse in the browser fails here instead.

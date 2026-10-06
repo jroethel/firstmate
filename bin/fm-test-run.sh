@@ -1659,6 +1659,13 @@ families_for_changed_path() {
     bin/fm-ff-lib.sh|bin/fm-gotmp*|bin/*pretool*)
       printf '%s\n' pure-contract-unit
       ;;
+    .agents/skills/bearings/assets/*|tests/assets/board-render-harness.mjs)
+      # The board template, the shipped themes, and the render harness have no
+      # suite that names every file path, so map them to their three suites.
+      printf '%s\n' "__script__:fm-bearings-board.test.sh"
+      printf '%s\n' "__script__:fm-bearings-board-render.test.sh"
+      printf '%s\n' "__script__:fm-theme.test.sh"
+      ;;
     .agents/skills/quota-array-dispatch/SKILL.md)
       printf '%s\n' pure-contract-unit
       printf '%s\n' live-harness-optin

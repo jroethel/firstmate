@@ -11,7 +11,7 @@ Start with the directory layout, then use the setting reference for the behavior
 | Task windows and worker tools | [Runtime backend](#runtime-backend-configbackend--fm_backend) and [harness support](#harness-support) |
 | Worker permissions, accounts, or environment | [Claude permission mode](#claude-permission-mode-configclaude-permission-mode), [worker account pin](#worker-account-pin-configclaude-account-configpi-account), and [worker launch environment](#worker-launch-environment-configlaunch-env-allowlist) |
 | Backlog, preferences, and memory | [Backlog backend](#backlog-backend-taskstoml--configbacklog-backend), [captain preferences](#captain-preferences-datacaptainmd--datacaptain-sharedmd), and [startup memory budget](#startup-memory-budget-configstartup-memory-budget) |
-| Supervision and presentation | [Pi supervision branch](#pi-supervision-branch), [supervision host](#supervision-host-configsupervision-host), and [Calm preference](#calm-preference-configcalm) |
+| Supervision and presentation | [Pi supervision branch](#pi-supervision-branch), [supervision host](#supervision-host-configsupervision-host), [Calm preference](#calm-preference-configcalm), and [board theme](#board-theme-configtheme) |
 | Persistent secondmates | [Secondmate routes](#secondmate-routes-datasecondmatesmd) |
 | Per-run overrides and tuning | [Environment variables](#environment-variables) |
 
@@ -158,6 +158,30 @@ The Pi extension reloads this preference on every Pi `session_start`, including 
 The Claude Code mod reloads it on every `session.start`, including same-process session replacement.
 It also loads the preference lazily before any row that can draw ahead of that event, including during `claude --continue` restoration.
 This preference is local to each Firstmate home and is not part of secondmate inherited configuration.
+
+## Board theme (config/theme)
+
+The optional `config/theme` file selects how this home's `/bearings lavish` board and fleet page look.
+With no file, the board looks exactly as it does today.
+Each line is `key=value`; blank lines and lines starting with `#` are ignored.
+
+| Key | Values | Default |
+| --- | --- | --- |
+| `theme` | A theme name | None; the board's own look |
+| `layout` | `full` or `compact` | `compact` |
+| `mode` | `light`, `dark`, or `auto` | `auto` |
+
+A theme is a folder holding `theme.css`, optional `fonts/*.woff2` with `fonts/LICENSE`, and an optional `noop-reply` line that sets the no-op reply.
+A name is looked up in `config/themes/<name>/` first, then in the themes shipped with Firstmate.
+A home theme is trusted for its design but is refused if it could escape the page or fetch anything remote.
+`bin/fm-theme.sh` owns the exact selection format, folder format, refusal rule, and size cap; read its header rather than this summary for the details.
+Changing the theme means editing the file and rebuilding the board.
+When a theme is named, the session digest carries a `THEME` line that gives the theme's no-op reply and the path of the fleet-page stylesheet, `.lavish/fleet-theme.css` in the home; the `bin/fm-theme.sh` header owns the line's exact form.
+A Firstmate-authored fleet page adopts that stylesheet by inlining or linking the file the theme line names.
+It sets the page root's `data-theme` and `data-mode` attributes, or its `color-scheme`, so the `light-dark()` colors resolve.
+It styles its own elements with the template's semantic custom properties, such as `--bg-page`, `--surface-card`, `--text-strong`, `--text-body`, `--text-muted`, `--border-default`, and the `--font-*` families.
+The stylesheet's reach is fonts and tokens, not the board's component layout.
+This file is local to each Firstmate home and is not part of secondmate inherited configuration.
 
 ## Pi supervision branch
 

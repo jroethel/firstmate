@@ -51,6 +51,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; }
 body {
   font-family: var(--font-sans);
@@ -110,6 +111,9 @@ a { color: inherit; text-decoration: none; }
 .fm-sign--eyebrow { color: var(--rust-500); }
 .fm-sign--muted { color: var(--ink-500); }
 .fm-sign svg { width: 14px; height: 14px; }
+@media (max-width: 600px) {
+  .fm-sign--muted { white-space: normal; line-height: 1.3; min-width: 0; }
+}
 .fm-ico { width: 1.15em; height: 1.15em; flex: none; vertical-align: -0.18em; }
 
 /* ============================================================
@@ -275,9 +279,54 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 900px) {
   .bb-cols { grid-template-columns: 1fr; }
 }
+
+/* ---- Layout, mode, and frame hooks (selected on the page root) ---- */
+.bb-frame-elbow, .bb-frame-rail, .bb-frame-cap { display: none; }
+
+:root[data-theme][data-mode="light"] { color-scheme: light; }
+:root[data-theme][data-mode="dark"] { color-scheme: dark; }
+:root[data-theme][data-mode="auto"] { color-scheme: light dark; }
+
+:root[data-layout] .bb-nav__inner { height: auto; min-height: 64px; flex-wrap: wrap; }
+
+:root[data-layout="full"] { --bb-frame-side: 212px; --bb-frame-bar: 56px; --bb-frame-radius: 100px; }
+:root[data-layout="full"] .bb-nav__inner,
+:root[data-layout="full"] .bb-main { max-width: none; }
+
+:root[data-layout="compact"] { --bb-frame-side: 26px; --bb-frame-bar: 46px; --bb-frame-radius: 46px; }
+:root[data-layout="compact"] .bb-nav__inner,
+:root[data-layout="compact"] .bb-main { max-width: var(--container-app); }
+:root[data-layout="compact"] .bb-main { gap: 16px; padding: 18px 20px 48px; }
+:root[data-layout="compact"] .bb-row { padding: 9px 14px; }
+
+@media (min-width: 901px) {
+  :root[data-layout="full"] .bb-main { display: grid; grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); gap: 22px; }
+  :root[data-layout="full"] .bb-main > * { grid-column: 2; }
+  :root[data-layout="full"] .bb-main > .bb-stats { grid-column: 1; grid-row: 1 / span 3; grid-template-columns: 1fr; align-self: start; }
+}
+@media (max-width: 900px) {
+  :root[data-layout] { --bb-frame-side: 0px; }
+}
+
+/* ---- In-page layout and mode switches ---- */
+.bb-switches { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.bb-switch {
+  display: inline-flex; overflow: hidden;
+  background: var(--surface-card); border: 1.5px solid var(--border-default); border-radius: var(--radius-pill);
+}
+.bb-switch button {
+  font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1; padding: 7px 12px;
+  background: transparent; color: var(--text-muted); border: 0; cursor: pointer;
+}
+.bb-switch button:hover { color: var(--text-strong); }
+.bb-switch button[aria-pressed="true"] { background: var(--text-strong); color: var(--surface-card); }
+.bb-switch button:focus-visible { outline: 2px solid var(--status-info); outline-offset: -2px; }
 </style>
+<!-- Theme slot: bin/fm-bearings-board.sh build owns this line. -->
+__FM_BEARINGS_BOARD_THEME__
 </head>
 <body>
+<div class="bb-frame-elbow" aria-hidden="true"></div>
 
 <header class="bb-nav">
   <div class="bb-nav__inner">
@@ -289,8 +338,20 @@ a { color: inherit; text-decoration: none; }
       </span>
       <span class="bb-brand__wm">bearings</span>
     </span>
+    <div class="bb-switches" id="bb-switches" hidden>
+      <div class="bb-switch" id="bb-switch-layout" role="group" aria-label="Layout">
+        <button type="button" value="full" aria-pressed="false">Full</button>
+        <button type="button" value="compact" aria-pressed="false">Compact</button>
+      </div>
+      <div class="bb-switch" id="bb-switch-mode" role="group" aria-label="Mode" hidden>
+        <button type="button" value="light" aria-pressed="false">Light</button>
+        <button type="button" value="dark" aria-pressed="false">Dark</button>
+        <button type="button" value="auto" aria-pressed="false">Auto</button>
+      </div>
+    </div>
   </div>
 </header>
+<div class="bb-frame-rail" aria-hidden="true"></div>
 
 <main class="bb-main">
 
@@ -370,10 +431,12 @@ a { color: inherit; text-decoration: none; }
   </footer>
 
 </main>
+<div class="bb-frame-cap" aria-hidden="true"></div>
 
-<!-- ONE SLOT. bin/fm-bearings-board.sh build injects the fresh
-     fm-bearings-board.v1 payload in place of the placeholder below; everything
-     above and below is the shipped template and is never regenerated per run. -->
+<!-- TWO SLOTS. bin/fm-bearings-board.sh build injects the fresh
+     fm-bearings-board.v1 payload in place of the placeholder below, and the
+     home's resolved theme stylesheet in place of the line before </head>;
+     everything else is the shipped template and is never regenerated per run. -->
 <script id="bearings-data" type="application/json">
 __FM_BEARINGS_BOARD_DATA__
 </script>
@@ -744,6 +807,40 @@ __FM_BEARINGS_BOARD_DATA__
     renderBoardError("The board data could not be rendered");
   }
 })();
+
+/* In-page layout and mode switches. Separate from the board render so a throw
+   here can never stop the board; nothing is persisted. Auto mode is pure CSS. */
+try {
+  (function () {
+    var root = document.documentElement;
+    var hasLayout = root.getAttribute("data-layout") !== null;
+    var hasTheme = root.getAttribute("data-theme") !== null;
+    var groups = [
+      { el: document.getElementById("bb-switch-layout"), attr: "data-layout", hide: !hasLayout },
+      { el: document.getElementById("bb-switch-mode"), attr: "data-mode", hide: !hasLayout || !hasTheme }
+    ];
+    document.getElementById("bb-switches").hidden = !hasLayout;
+    function refresh() {
+      groups.forEach(function (g) {
+        if (g.hide) return;
+        Array.prototype.forEach.call(g.el.querySelectorAll("button"), function (b) {
+          b.setAttribute("aria-pressed", String(root.getAttribute(g.attr) === b.value));
+        });
+      });
+    }
+    groups.forEach(function (g) {
+      g.el.hidden = g.hide;
+      if (g.hide) return;
+      Array.prototype.forEach.call(g.el.querySelectorAll("button"), function (b) {
+        b.addEventListener("click", function () {
+          root.setAttribute(g.attr, b.value);
+          refresh();
+        });
+      });
+    });
+    refresh();
+  })();
+} catch (e) {}
 </script>
 </body>
 </html>
