@@ -297,6 +297,8 @@ EOF
       "$HERDR_LAB_HELPER" teardown "$HERDR_LAB_SESSION" >/dev/null 2>&1 || true
     LAB_READY=0
   fi
+  # Spawn leaves each task's git-hooks strip directory read-only.
+  chmod -R u+w "$TMP_ROOT" 2>/dev/null || true
   rm -rf "$TMP_ROOT"
 }
 trap cleanup_all EXIT
@@ -1318,10 +1320,31 @@ PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" stop "$HERDR_LAB_SESSION" >/dev/
 PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" provision "$HERDR_LAB_SESSION" \
   || fail "could not reprovision the isolated session for concurrent recovery"
 CONCURRENT_RECOVERY_FOCUS=$(focus_snapshot)
+# Hold the shared lock well past the short fresh-create wait while both
+# recoveries queue, so this case proves a resume waits behind a peer's long
+# hold rather than refusing, whatever either real resume's own hold lasts.
+WAVE_LOCK_READY="$TMP_ROOT/wave-lock-ready"
+WAVE_LOCK_RELEASE="$TMP_ROOT/wave-lock-release"
+WAVE_LOCK_PATH=$(session_presentation_lock_path) \
+  || fail "could not resolve the session lock for concurrent recovery"
+ROOT="$ROOT" READY="$WAVE_LOCK_READY" RELEASE="$WAVE_LOCK_RELEASE" LOCK="$WAVE_LOCK_PATH" bash -c '
+  . "$ROOT/bin/fm-wake-lib.sh"
+  fm_lock_try_acquire "$LOCK" || exit 1
+  : > "$READY"
+  while [ ! -e "$RELEASE" ]; do sleep 0.05; done
+  fm_lock_release "$LOCK"
+' &
+LOCK_CONTENTION_OWNER_PID=$!
+while [ ! -e "$WAVE_LOCK_READY" ] && kill -0 "$LOCK_CONTENTION_OWNER_PID" 2>/dev/null; do sleep 0.01; done
+[ -e "$WAVE_LOCK_READY" ] || fail "could not hold the session lock for concurrent recovery"
 spawn_task "$PRIMARY_WAVE_ID" "$HOME_DIR" "$RECOVERY_PROJECT_DIR" > "$TMP_ROOT/primary-wave-resume.out" 2> "$TMP_ROOT/primary-wave-resume.err" &
 PRIMARY_WAVE_PID=$!
 spawn_task "$BRAVO_WAVE_ID" "$SECOND_HOME_B" "$RECOVERY_PROJECT_DIR" > "$TMP_ROOT/bravo-wave-resume.out" 2> "$TMP_ROOT/bravo-wave-resume.err" &
 BRAVO_WAVE_PID=$!
+sleep 10
+: > "$WAVE_LOCK_RELEASE"
+wait "$LOCK_CONTENTION_OWNER_PID" || fail "concurrent recovery lock owner failed"
+LOCK_CONTENTION_OWNER_PID=
 wait "$PRIMARY_WAVE_PID" || fail "concurrent primary recovery failed: $(cat "$TMP_ROOT/primary-wave-resume.err")"
 wait "$BRAVO_WAVE_PID" || fail "concurrent secondmate recovery failed: $(cat "$TMP_ROOT/bravo-wave-resume.err")"
 PRIMARY_WAVE_NEW_WT=$(remember_meta_worktree "$PRIMARY_WAVE_META")

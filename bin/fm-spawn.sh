@@ -1422,13 +1422,18 @@ trap spawn_abort_cleanup EXIT
 # One bounded lock per live Herdr session/socket, shared across all homes.
 # <session> is required so secondmate and primary spawns serialize against the
 # same session without writing any other home's state directory.
+# A projected spawn holds it until its launch is sent, across worktree entry
+# and launch staging, so a peer's hold routinely lasts several seconds.
+# [attempts] (0.1 s each) defaults to the short wait a caller that degrades
+# flat on contention can afford; a caller that refuses instead must pass a wait
+# that outlasts a peer's whole hold.
 spawn_herdr_presentation_order_lock_acquire() {
-  local session=${1:-} attempt lock_path
+  local session=${1:-} attempts=${2:-50} attempt lock_path
   [ -n "$session" ] || session=$(fm_backend_herdr_session)
   lock_path=$(fm_backend_herdr_presentation_session_lock_path "$session") || return 1
   HERDR_PRESENTATION_ORDER_LOCK="$lock_path"
   attempt=0
-  while [ "$attempt" -lt 50 ]; do
+  while [ "$attempt" -lt "$attempts" ]; do
     if fm_lock_try_acquire "$HERDR_PRESENTATION_ORDER_LOCK"; then
       HERDR_PRESENTATION_ORDER_LOCK_HELD=1
       return 0
@@ -3712,7 +3717,10 @@ else
           echo "error: herdr presentation recovery could not ensure its exact named session" >&2
           exit 1
         }
-        spawn_herdr_presentation_order_lock_acquire "$HERDR_SES" || {
+        # Homes resuming together after a restart queue here behind each
+        # other's whole spawn hold, whose worktree entry alone polls up to 60
+        # times; two minutes refuses only a holder wedged past its own bounds.
+        spawn_herdr_presentation_order_lock_acquire "$HERDR_SES" 1200 || {
           echo "error: herdr presentation recovery could not acquire its session lock; refusing a concurrent resume" >&2
           exit 1
         }
