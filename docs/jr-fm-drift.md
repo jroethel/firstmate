@@ -2,7 +2,22 @@
 
 Where this fork (jroethel/firstmate) deliberately differs from kunchenguid/firstmate, and every upstream decision it accepted over its own.
 Read this before resolving a sync conflict, and add a row whenever a sync forces a choice.
-Sync procedure: `bin/jr-fm-sync-upstream.sh`, then `--finish`; the push is the captain's to fire.
+
+## Sync runbook
+
+Run it whenever you want upstream's changes; it is safe to run any time and says "already up to date" when there is nothing to do.
+Do it while the fleet is idle, because a live session re-reads `AGENTS.md`.
+
+1. `cd ~/_no1 && git switch main`, with no uncommitted changes.
+2. `bin/jr-fm-sync-upstream.sh` fetches upstream and merges it on a scratch branch.
+3. If it reports conflicts, resolve them using the rows below, then `git add <files> && git commit --no-edit`.
+4. `bin/jr-fm-sync-upstream.sh --finish` runs the doc and lint checks, then fast-forwards `main`.
+5. Run the owning tests for any file that conflicted, with `DISABLE_AUTOUPDATER` and `TYPESAFE_API_KEY` unset.
+6. `git push origin main` (yours to fire).
+7. Other hosts: `git pull --ff-only origin main`.
+8. The running firstmate home picks up the new `AGENTS.md`, `bin/`, and `.agents/skills/` through `/updatefirstmate`.
+
+No skill drives steps 1-4; steps 5-8 are outside the script.
 
 ## Accepted upstream over the fork
 
