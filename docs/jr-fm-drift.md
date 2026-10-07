@@ -5,15 +5,15 @@ Read this before resolving a sync conflict, and add a row whenever a sync forces
 
 ## Sync runbook
 
-One command: `bin/jr-fm-sync-upstream.sh [--push] [--full]`.
-Run it whenever you want upstream's changes, from `main` with a clean tree and an idle fleet (a live session re-reads `AGENTS.md`).
-It is safe to rerun at any point and resumes where it stopped; it says "already up to date" when there is nothing to pull.
+Three ordered steps in `bin/jr-fm-sync-upstream.sh`; run it with no argument to see which is next.
+Each step refuses to run before the one it depends on, and every step is safe to rerun.
+Start from `main` with a clean tree and an idle fleet (a live session re-reads `AGENTS.md`).
 
-It fetches, merges `upstream/main` on scratch branch `sync-upstream`, runs the doc and lint checks plus the tests for every file both sides changed, fast-forwards `main`, and pushes only when you pass `--push`.
-The real-Herdr tests (about 12 minutes) are skipped unless you pass `--full`.
-
-The only time it needs you: it stops on conflicts, naming the files.
-Edit them using the decisions below, then rerun the same command; it stages the resolved files and commits the merge itself.
+1. `bin/jr-fm-sync-upstream.sh 1 "keyword"` lists what upstream added and searches its open PRs and issues for the keyword, so you do not rebuild a fix that already exists.
+2. `bin/jr-fm-sync-upstream.sh 2` merges `upstream/main` on scratch branch `sync-upstream`, runs the doc and lint checks plus the tests for every file both sides changed, and fast-forwards `main`.
+   The real-Herdr tests (about 12 minutes) run only with `--full`.
+   It stops on conflicts, naming the files; resolve them using the decisions below and rerun step 2, which stages the resolved files and commits the merge itself.
+3. `bin/jr-fm-sync-upstream.sh 3` pushes `origin main` (yours to fire) and clears the progress markers, which live under `.git/jr-fm-sync`.
 
 Outside the script:
 
