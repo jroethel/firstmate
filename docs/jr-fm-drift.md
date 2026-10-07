@@ -28,7 +28,7 @@ Outside the script:
 - Fork change (#13, d0ad4f8b): a recovering spawn waited up to 120 s (`attempts=1200`) for the shared Herdr presentation lock, so homes resuming together queued instead of refusing.
 - Upstream change (#6649, 23e71b3d): a resume refuses by default; `fm-spawn.sh --herdr-resume-lock-wait` opts into waiting.
 - Decision: take upstream's default, so `bin/fm-spawn.sh` and `docs/herdr-backend.md` match upstream for this feature and carry no fork delta.
-- What kept the fork's CI fix: `tests/fm-backend-herdr-presentation-e2e.test.sh`, concurrent cross-home recovery case, now passes `--herdr-resume-lock-wait` to both resumes.
+- The fork's own test changes for it (#13: a held-lock queueing case and a read-only tmp cleanup) are dropped too, so `tests/fm-backend-herdr-presentation-e2e.test.sh` matches upstream and upstream's own lock-wait tests cover the behavior.
 - Consequence: a real resume that meets a held lock refuses unless the caller passes the flag.
 - Revisit if: homes resuming together after a restart start refusing in practice; then the fix is passing the flag at the restart call site, not re-forking the default.
 
