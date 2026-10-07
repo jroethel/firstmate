@@ -1446,21 +1446,17 @@ trap spawn_abort_cleanup EXIT
 # session without writing any other home's state directory.
 #
 # Default mode is one BOUNDED attempt. A clean create uses that default and
-# falls back to the ordinary flat layout on contention. An exact resume
-# passes a two-minute bound and hard-refuses on contention (it does not degrade
-# flat). Passing mode `wait` makes this call WAIT for the lock instead
+# falls back to the ordinary flat layout on contention. An exact resume also
+# defaults to the bounded attempt and hard-refuses on contention (it does not
+# degrade flat). Passing mode `wait` makes this call WAIT for the lock instead
 # (`fm_lock_acquire_wait`, the same unbounded-wait idiom this file already uses
 # for its other fleet-shared locks). Only the recovery path under the explicit
 # --herdr-resume-lock-wait opt-in passes `wait`, so unbounded blocking on a
 # third-party session lock never becomes the default for every caller.
 # Dead-owner reclaim inside `fm_lock_try_acquire` still bounds a wait against a
 # holder that crashed mid-hold.
-#
-# [attempts] (0.1 s each) sizes the bounded mode. A projected spawn holds the lock
-# until its launch is sent, so a peer's hold routinely lasts several seconds: a
-# caller that refuses instead of degrading flat must pass a wait that outlasts it.
 spawn_herdr_presentation_order_lock_acquire() {
-  local session=${1:-} mode=${2:-} attempts=${3:-50} attempt lock_path
+  local session=${1:-} mode=${2:-} attempt lock_path
   [ -n "$session" ] || session=$(fm_backend_herdr_session)
   lock_path=$(fm_backend_herdr_presentation_session_lock_path "$session") || return 1
   HERDR_PRESENTATION_ORDER_LOCK="$lock_path"
@@ -1470,7 +1466,7 @@ spawn_herdr_presentation_order_lock_acquire() {
     return 0
   fi
   attempt=0
-  while [ "$attempt" -lt "$attempts" ]; do
+  while [ "$attempt" -lt 50 ]; do
     if fm_lock_try_acquire "$HERDR_PRESENTATION_ORDER_LOCK"; then
       HERDR_PRESENTATION_ORDER_LOCK_HELD=1
       return 0
@@ -3773,10 +3769,7 @@ else
             exit 1
           }
         else
-          # Homes resuming together after a restart queue here behind each
-          # other's whole spawn hold, whose worktree entry alone polls up to 60
-          # times; two minutes refuses only a holder wedged past its own bounds.
-          spawn_herdr_presentation_order_lock_acquire "$HERDR_SES" "" 1200 || {
+          spawn_herdr_presentation_order_lock_acquire "$HERDR_SES" || {
             echo "error: herdr presentation recovery could not acquire its session lock; refusing a concurrent resume" >&2
             exit 1
           }

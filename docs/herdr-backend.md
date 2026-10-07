@@ -457,9 +457,8 @@ Any of these preserves the candidate and lets session startup continue with at m
 - A failed journal publication or projected workspace create stops that spawn instead of falling back flat.
   So a Herdr create failure surfaces as a spawn failure in every Herdr home, rather than only in homes that opted in.
   Every earlier degradation on the fresh projected-create path (no session server, contended presentation lock, absent or ambiguous parent) still warns and continues flat.
-- Recovery of an existing presentation journal waits up to two minutes by default behind a concurrent holder of the shared presentation lock, so homes resuming together after a restart serialize.
-  It refuses, rather than falling back flat, only when the lock stays held past that wait.
-  Pass `fm-spawn.sh --herdr-resume-lock-wait` to opt that recovery into waiting without that two-minute bound.
+- Recovery of an existing presentation journal refuses by default when the shared presentation lock is contended, rather than falling back flat.
+  Pass `fm-spawn.sh --herdr-resume-lock-wait` to opt that recovery into waiting for the lock instead, so concurrent recoveries can serialize.
   The flag applies to a fresh ship or scout spawn that recovers a journal.
   The multi-task path forwards the flag to each per-pair spawn.
   `fm-spawn.sh --relaunch` and `--secondmate` take no exact-resume presentation-order lock, so the flag has no effect there.
