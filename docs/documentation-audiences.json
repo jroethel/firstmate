@@ -545,6 +545,10 @@
       "audience": "maintainer-architecture"
     },
     {
+      "path": "docs/briefs/2026-10-07.molt-harness-drift-brief.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/loop/conventions.md",
       "audience": "maintainer-architecture"
     },
