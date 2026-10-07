@@ -2,7 +2,7 @@
 // working row while Calm is on, its cadence on the mocked clock, its size against the
 // viewport, and how it lets go of a site the surface no longer draws.
 import { describe, expect, test } from "claude-code/testing";
-import { calmCommand, decodeCells, isStock, rasterOf, spinner, themeChange, unmeasuredSpinner, world } from "./support.ts";
+import { calmCommand, decodeCells, isHidden, isStock, rasterOf, spinner, themeChange, unmeasuredSpinner, world } from "./support.ts";
 
 const SAIL = "◿│◣";
 const HULL = "╲▁▁▁╱";
@@ -14,6 +14,58 @@ const LIGHT_WATER = 0x5769f7;
 const BOAT = 0xd77757;
 const TICK = 220;
 const TICKS_PER_MOVE = 4;
+
+const BOARD_SLOT = "fm-threads.slot";
+const CALM_SLOT = "fm.workingSlot";
+const turnStart = { text: "go", turnId: "t1" };
+const turnComplete = { answer: "", durationMs: 1, isAborted: false, turnId: "t1", reason: "answer" as const };
+
+describe("the working ship in the thread board's slot", () => {
+  test("publishes its frame for the slot's width while a turn runs, and draws no row of its own", async ($, on) => {
+    const { clock, journal, state } = world(on, { preference: "on\n" });
+    state.set(BOARD_SLOT, { columns: 30 });
+    await $.session.start({ cwd: "/work", surface: "terminal", isInteractive: true });
+    await $.turn.start(turnStart);
+    expect(isHidden(await $.ui.render(spinner()))).toBe(true);
+    await clock.advance(TICK);
+    const frame = state.get(CALM_SLOT) as { columns: number; rows: number; cells: string };
+    expect(frame).toMatchObject({ columns: 30, rows: 2 });
+    const { glyphs } = decodeCells(frame.cells, 30, 2);
+    expect(glyphs[1]).toContain(HULL);
+    expect(glyphs[0]).toContain(SAIL);
+    // The animation moves in the slot as it does in the row: one frame per tick, no blit.
+    await clock.advance(TICK);
+    expect(state.get(CALM_SLOT)).not.toEqual(frame);
+    expect(journal.blits).toHaveLength(0);
+  });
+
+  test("clears the slot when the turn completes, and when Calm is turned off", async ($, on) => {
+    const { clock, state } = world(on, { preference: "on\n" });
+    state.set(BOARD_SLOT, { columns: 30 });
+    await $.session.start({ cwd: "/work", surface: "terminal", isInteractive: true });
+    await $.turn.start(turnStart);
+    await clock.advance(TICK);
+    expect(state.get(CALM_SLOT)).not.toBeNull();
+    await $.turn.complete(turnComplete);
+    expect(state.get(CALM_SLOT)).toBeNull();
+    await $.turn.start(turnStart);
+    await clock.advance(TICK);
+    expect(state.get(CALM_SLOT)).not.toBeNull();
+    await $.command.run(calmCommand());
+    expect(state.get(CALM_SLOT)).toBeNull();
+    await clock.advance(TICK * 3);
+    expect(state.get(CALM_SLOT)).toBeNull();
+  });
+
+  test("keeps the full-width row and publishes nothing when no thread board is loaded", async ($, on) => {
+    const { clock, state } = world(on, { preference: "on\n" });
+    await $.session.start({ cwd: "/work", surface: "terminal", isInteractive: true });
+    await $.turn.start(turnStart);
+    expect(rasterOf(await $.ui.render(spinner("agent-main", { columns: 40, rows: 24 })))).toBeDefined();
+    await clock.advance(TICK * 3);
+    expect(state.get(CALM_SLOT)).toBeUndefined();
+  });
+});
 
 describe("the working ship", () => {
   test("replaces the spinner with a two-row raster sized to the row inside the transcript margin", async ($, on) => {

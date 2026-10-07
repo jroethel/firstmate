@@ -209,6 +209,7 @@ While Calm is on, the stock working row (`Sauteing... (12s · 300 tokens)`) beco
 The sailboat fills the row inside the transcript margin.
 It repaints on the boat's 220ms cadence, with the hull moving every 880ms.
 It reflows on resize, and appears and disappears exactly where the stock row would.
+When the thread board mod (`.claude/mods/firstmate-thread-board`) is loaded, the boat draws in the 30-column slot at the far right of its bar instead, and the working row takes no space.
 
 On Claude Code the boat is painted in Claude Code's own theme colors rather than Pi's standard ANSI codes:
 

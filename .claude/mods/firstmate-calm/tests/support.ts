@@ -42,6 +42,8 @@ export type World = {
   denyBlits: (reason: string | undefined) => void;
   /** Set to reject every `$.fs.write` from now on. */
   failWrites: (reason: string | undefined) => void;
+  /** The host's `$.state` values by `plugin.key`: seed one the thread board owns, read one Calm publishes. */
+  state: Map<string, unknown>;
   /** Set the id `$.session.id()` answers from now on, as a new or resumed session has. */
   setSessionId: (id: string) => void;
 };
@@ -107,6 +109,14 @@ export function world(on: On, options: WorldOptions = {}): World {
     mtimeMs = mtimes.get(e.path) ?? mtimeMs;
     return { value: { kind: "file" as const, size: text.length, mtimeMs } };
   });
+  const state = new Map<string, unknown>();
+  on("state.get", async (_$, e) => ({ value: { value: state.get(`${e.plugin}.${e.key}`) as never, version: 1 } }));
+  on("state.set", async (_$, e) => {
+    state.set(`${e.plugin}.${e.key}`, e.value);
+    return { value: { isSet: true as const, version: 1 } };
+  });
+  on("turn.start", async (_$, e) => ({ turnId: e.turnId }));
+  on("turn.complete", async () => ({ text: "" }));
   on("ui.log", async (_$, e) => {
     journal.logs.push(e.text);
     return { value: undefined };
@@ -169,6 +179,7 @@ export function world(on: On, options: WorldOptions = {}): World {
     files,
     mtimes,
     journal,
+    state,
     denyBlits: (reason) => {
       blitDenial = reason;
     },

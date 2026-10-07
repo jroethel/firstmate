@@ -24,6 +24,12 @@
 // draws as zero height; an `AssistantMessage` block recorded as a mid-turn working note
 // draws as zero height. Calm off returns every drawing to the
 // engine. A toggle invalidates every hooked drawing, so rows already on screen redraw.
+// Where the Firstmate thread board (../../firstmate-thread-board, plugin `fm-threads`) is
+// loaded, it reserves a 30-column slot at the far right of its bar and says so in its `slot`
+// state value; the boat then draws there instead of across the transcript: this mod
+// publishes the packed frame as its own `workingSlot` state value on the sprite's tick for
+// the turn's duration, and the Spinner row draws as zero height. Without the bar nothing
+// changes. The bar never writes Calm's state and Calm never writes the bar's.
 // The boat is painted in Claude Code's own theme colors: the family is read from the
 // `theme` setting at load and re-read when a `config.set` changes it.
 //
@@ -77,6 +83,10 @@ import {
   type HostHealth,
 } from "../lib/fm-branch-notes.ts";
 
+// The state values shared with the thread board: this mod owns `workingSlot`, the board owns `slot`.
+const WORKING_SLOT = { plugin: "fm", key: "workingSlot" } as const;
+const BOARD_SLOT = { plugin: "fm-threads", key: "slot" } as const;
+
 /** The slash command the mod serves, the same name as Pi's `/calm`. */
 const CALM_COMMAND = "calm";
 
@@ -87,6 +97,9 @@ let preferencePath: string | undefined;
 let activation: Promise<boolean> | undefined;
 let loading: Promise<void> | undefined;
 let ticker: { cancel(): void } | undefined;
+// Whether a main-loop turn is running, and whether a frame is currently published to the bar's slot.
+let working = false;
+let slotPublished = false;
 const workingNotes = new Set<string>();
 const finalReplies = new Set<string>();
 // Each doorbell's record verdict, by record path. Records are immutable once published
@@ -191,6 +204,7 @@ function ensureLoaded($: EngineInterface): Promise<void> {
 async function resetSession($: EngineInterface): Promise<void> {
   if (loading !== undefined) await loading.catch(() => undefined);
   calm = false;
+  working = false;
   preferencePath = undefined;
   loading = undefined;
   workingNotes.clear();
@@ -208,9 +222,34 @@ function invalidateDrawings($: EngineInterface): void {
   $.ui.invalidate("ui.render");
 }
 
+/** The width of the thread board's slot, or undefined while no bar is loaded. */
+async function boardSlotColumns($: EngineInterface): Promise<number | undefined> {
+  return (await $.state.get(BOARD_SLOT)).value?.columns;
+}
+
+/** Publish the boat's current frame for the bar's slot, or clear it when there is nothing to show. */
+async function publishSlot($: EngineInterface, columns: number | undefined): Promise<void> {
+  if (!calm || !working || columns === undefined) {
+    if (!slotPublished) return;
+    slotPublished = false;
+    await $.state.set(WORKING_SLOT, null);
+    return;
+  }
+  const packed = packCalmShipRasterCells(sprite.frame(columns), columns, palette);
+  slotPublished = true;
+  await $.state.set(WORKING_SLOT, { columns, rows: packed.rows, cells: packed.cells });
+}
+
 /** One scheduler tick: advance the sprite, then repaint every mounted boat in place. */
 async function repaintShip($: EngineInterface): Promise<void> {
-  if (!calm || sites.size === 0) return;
+  if (!calm) return;
+  const slot = working ? await boardSlotColumns($) : undefined;
+  if (slot !== undefined) {
+    sprite.tick();
+    await publishSlot($, slot);
+    return;
+  }
+  if (sites.size === 0) return;
   sprite.tick();
   for (const [requestId, site] of sites) {
     const packed = packCalmShipRasterCells(sprite.frame(site.columns), site.columns, palette);
@@ -396,10 +435,26 @@ export const register: Register = (on) => {
     }
     calm = active;
     if (!calm) sites.clear();
+    await publishSlot($, await boardSlotColumns($));
     invalidateDrawings($);
     $.ui.toast(active ? "Calm on" : "Calm off");
     // No `text`: the toggle leaves no output row in the transcript, as on Pi.
     return {};
+  });
+
+  // The boat shows in the bar's slot only while a main-loop turn runs.
+  on("turn.start", async ($, e, next) => {
+    if (!(await isActivated($))) return next(e);
+    working = true;
+    return next(e);
+  });
+  on("turn.complete", async ($, e, next) => {
+    if (!(await isActivated($))) return next(e);
+    if (e.agentId === undefined) {
+      working = false;
+      await publishSlot($, undefined);
+    }
+    return next(e);
   });
 
   // Follow a theme change: the next drawing and every later blit use the new family.
@@ -459,6 +514,11 @@ export const register: Register = (on) => {
     if (!calm || e.surface !== "terminal") {
       sites.delete(e.requestId);
       return next(e);
+    }
+    // With the thread board loaded the boat draws in its slot, so this row takes no space.
+    if ((await boardSlotColumns($)) !== undefined) {
+      sites.delete(e.requestId);
+      return hiddenRow($, e);
     }
     const columns = calmShipRasterColumns(e.viewport?.columns);
     const packed = packCalmShipRasterCells(sprite.frame(columns), columns, palette);

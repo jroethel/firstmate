@@ -1,0 +1,10 @@
+{
+  "name": "fm-threads",
+  "version": "1.0.0",
+  "description": "Firstmate thread board for Claude Code: a two-row bar above the prompt showing the last response's date and time and every open conversation thread, with a reserved slot at the far right that Firstmate Calm fills with its working animation. The model keeps the threads through the `thread` tool. Activates only when CLAUDE_CODE_ENABLE_FUNCTION_HOOKS is exactly 1 and is otherwise a complete no-op.",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Firstmate",
+    "url": "https://github.com/kunchenguid/firstmate"
+  }
+}
