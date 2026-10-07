@@ -37,6 +37,7 @@ Outside the script:
 - `bin/jr-fm-*`: the captain's own scripts, prefix `jr-fm-`, never colliding with upstream's `fm-*`.
 - Everything in `git log upstream/main..main`: at last sync, the Bearings themes (#10, #12), the thread-board mod, and the test-only parts of the CI fixes (#13, #14).
 - Pending from the harness-drift brief (`docs/briefs/2026-10-07.molt-harness-drift-brief.md`): prose patch, `.pi/skills` symlink, decision-hold removal, composer fix.
+  Filed 2026-10-07: the composer fix as #16 and the environment leak below as #15; the rest waits on the brief's own issue once its scope is agreed.
 
 ## Known environment leak
 
