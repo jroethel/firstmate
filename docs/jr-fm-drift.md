@@ -5,19 +5,21 @@ Read this before resolving a sync conflict, and add a row whenever a sync forces
 
 ## Sync runbook
 
-Run it whenever you want upstream's changes; it is safe to run any time and says "already up to date" when there is nothing to do.
-Do it while the fleet is idle, because a live session re-reads `AGENTS.md`.
+One command: `bin/jr-fm-sync-upstream.sh [--push] [--quick]`.
+Run it whenever you want upstream's changes, from `main` with a clean tree and an idle fleet (a live session re-reads `AGENTS.md`).
+It is safe to rerun at any point and resumes where it stopped; it says "already up to date" when there is nothing to pull.
 
-1. `cd ~/_no1 && git switch main`, with no uncommitted changes.
-2. `bin/jr-fm-sync-upstream.sh` fetches upstream and merges it on a scratch branch.
-3. If it reports conflicts, resolve them using the rows below, then `git add <files> && git commit --no-edit`.
-4. `bin/jr-fm-sync-upstream.sh --finish` runs the doc and lint checks, then fast-forwards `main`.
-5. Run the owning tests for any file that conflicted, with `DISABLE_AUTOUPDATER` and `TYPESAFE_API_KEY` unset.
-6. `git push origin main` (yours to fire).
-7. Other hosts: `git pull --ff-only origin main`.
-8. The running firstmate home picks up the new `AGENTS.md`, `bin/`, and `.agents/skills/` through `/updatefirstmate`.
+It fetches, merges `upstream/main` on scratch branch `sync-upstream`, runs the doc and lint checks plus the tests for every file both sides changed, fast-forwards `main`, and pushes only when you pass `--push`.
+`--quick` skips the real-Herdr tests (about 12 minutes).
 
-No skill drives steps 1-4; steps 5-8 are outside the script.
+The only time it needs you: it stops on conflicts, naming the files.
+Edit them using the decisions below, then rerun the same command; it stages the resolved files and commits the merge itself.
+
+Outside the script:
+
+- Other hosts: `git pull --ff-only origin main`.
+- Running firstmate home: `/updatefirstmate` (it runs `bin/fm-update.sh`; reread `AGENTS.md` when it says so).
+- Tool prerequisites: `bin/fm-install-actionlint.sh ~/.local/bin` (the script puts that on PATH); `ruby` for `tests/fm-test-run.test.sh`.
 
 ## Accepted upstream over the fork
 
