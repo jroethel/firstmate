@@ -5,12 +5,12 @@ Read this before resolving a sync conflict, and add a row whenever a sync forces
 
 ## Sync runbook
 
-One command: `bin/jr-fm-sync-upstream.sh [--push] [--quick]`.
+One command: `bin/jr-fm-sync-upstream.sh [--push] [--full]`.
 Run it whenever you want upstream's changes, from `main` with a clean tree and an idle fleet (a live session re-reads `AGENTS.md`).
 It is safe to rerun at any point and resumes where it stopped; it says "already up to date" when there is nothing to pull.
 
 It fetches, merges `upstream/main` on scratch branch `sync-upstream`, runs the doc and lint checks plus the tests for every file both sides changed, fast-forwards `main`, and pushes only when you pass `--push`.
-`--quick` skips the real-Herdr tests (about 12 minutes).
+The real-Herdr tests (about 12 minutes) are skipped unless you pass `--full`.
 
 The only time it needs you: it stops on conflicts, naming the files.
 Edit them using the decisions below, then rerun the same command; it stages the resolved files and commits the merge itself.

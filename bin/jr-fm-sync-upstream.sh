@@ -1,22 +1,21 @@
 #!/usr/bin/env bash
 # Sync this fork's main with kunchenguid/firstmate. Run it, read the last line,
 # and run it again if it says to; it resumes wherever it stopped.
-#   jr-fm-sync-upstream.sh [--push] [--quick]
+#   jr-fm-sync-upstream.sh [--push] [--full]
 # Stops, in order, at: dirty tree, unresolved conflicts, failed checks.
 #   fetch -> merge upstream/main on scratch branch sync-upstream -> (you resolve
 #   conflicts, then rerun) -> doc + lint + the tests that cover files both sides
 #   touched -> fast-forward main -> push only with --push.
-# --quick skips the tests that need real Herdr (about 12 minutes); a plain run
-# includes them. git rerere replays a conflict resolution recorded earlier.
+# The tests that need real Herdr (about 12 minutes) are skipped unless --full. git rerere replays a conflict resolution recorded earlier.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PATH="$HOME/.local/bin:$PATH"  # pinned actionlint lives here (bin/fm-install-actionlint.sh)
-BR=sync-upstream PUSH=0 QUICK=0
+BR=sync-upstream PUSH=0 FULL=0
 for a in "$@"; do
   case "$a" in
     --push) PUSH=1 ;;
-    --quick) QUICK=1 ;;
-    *) echo "usage: $0 [--push] [--quick]" >&2; exit 2 ;;
+    --full) FULL=1 ;;
+    *) echo "usage: $0 [--push] [--full]" >&2; exit 2 ;;
   esac
 done
 die() { echo "error: $*" >&2; exit 1; }
@@ -90,7 +89,7 @@ bash bin/fm-lint.sh
 if [ "${#tests[@]}" -gt 0 ]; then
   # DISABLE_AUTOUPDATER and TYPESAFE_API_KEY leak into the dispatch tests (docs/jr-fm-drift.md)
   excl=()
-  [ "$QUICK" = 0 ] || excl=(--exclude-family real-herdr-gated)
+  [ "$FULL" = 1 ] || excl=(--exclude-family real-herdr-gated)
   env -u DISABLE_AUTOUPDATER -u TYPESAFE_API_KEY bash bin/fm-test-run.sh ${excl[@]+"${excl[@]}"} "${tests[@]}"
 fi
 
