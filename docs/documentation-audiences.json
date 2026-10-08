@@ -541,6 +541,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/archive/2026-10-07-import-triage.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/briefs/2026-10-05.I1.theming-surface-brief.md",
       "audience": "maintainer-architecture"
     },
