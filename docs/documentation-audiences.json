@@ -573,6 +573,10 @@
       "audience": "maintainer-architecture"
     },
     {
+      "path": "docs/plans/2026-10-08.fork-migration-plan.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/reviews/2026-10-05.I1.theming-surface-batch-review.md",
       "audience": "maintainer-architecture"
     },
