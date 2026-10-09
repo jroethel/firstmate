@@ -39,6 +39,8 @@ Outside the scripts:
 
 - `bin/jr-fm-*`: the captain's own scripts, prefix `jr-fm-`, never colliding with upstream's `fm-*`.
 - Everything in `git log upstream/main..main`: at last sync, the Bearings themes (#10, #12), the thread-board mod, and the test-only parts of the CI fixes (#13, #14).
+- The background-move session-lock fix, offered upstream as https://github.com/kunchenguid/firstmate/pull/6926 and still unmerged: the fork carries it ahead of upstream (`fm_session_lock_handed_off_to_self` in `bin/fm-session-lock-lib.sh`, its `bin/fm-lock.sh` and Stop auto-arm callers, and the live guard `tests/fm-session-lock-background-move-live-e2e.test.sh`).
+  Drop it at the sync after upstream merges it.
 - Pending from the harness-drift brief (`docs/briefs/2026-10-07.molt-harness-drift-brief.md`): prose patch, `.pi/skills` symlink, decision-hold removal, composer fix.
   Filed 2026-10-07: the composer fix as #16 and the environment leak below as #15; the rest waits on the brief's own issue once its scope is agreed.
 
