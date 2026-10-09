@@ -8,6 +8,9 @@
 # network, and the absent-key case proves the tool makes no call
 # at all.
 set -u
+# The absent-key case proves the tool makes no call, so an ambient key from the
+# caller's shell must not leak in; the keyed cases pass the key explicitly.
+unset TYPESAFE_API_KEY TYPESAFE_API_KEY_PRIVATE
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"

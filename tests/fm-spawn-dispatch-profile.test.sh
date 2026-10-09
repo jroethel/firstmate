@@ -6,6 +6,9 @@
 # literal launch command sent with `tmux send-keys -l`, so assertions pin the
 # command firstmate would run without starting any real harness.
 set -u
+# fm-spawn prepends an ambient DISABLE_AUTOUPDATER to the launch line, which the
+# canonical-launch expectations do not model; this test never takes the live gate.
+unset DISABLE_AUTOUPDATER
 
 # shellcheck source=tests/fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
