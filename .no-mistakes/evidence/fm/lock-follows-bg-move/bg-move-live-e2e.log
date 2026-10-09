@@ -1,0 +1,534 @@
++ set -u
+++ dirname tests/fm-session-lock-background-move-live-e2e.test.sh
++ . tests/lib.sh
+++ '[' -n '' ']'
+++ FM_TEST_LIB_SOURCED=1
+++ umask 022
++++ dirname tests/lib.sh
+++ . tests/git-config-helpers.sh
++++ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
++++ GIT_CONFIG_GLOBAL=/dev/null
++++ GIT_CONFIG_NOSYSTEM=1
+++ export FM_GATE_REFUSE_BYPASS=1
+++ FM_GATE_REFUSE_BYPASS=1
+++ export FM_TEST_SEAM=1
+++ FM_TEST_SEAM=1
+++ unset FM_TASK_ID
+++ unset TASKS_AXI_FILE TASKS_AXI_BACKEND
+++++ dirname tests/lib.sh
++++ cd tests/..
++++ pwd
+++ ROOT=/home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6
++++ fm_test_tmpdir
++++ local base=/tmp physical
++++ base=/tmp
++++ '[' -n /tmp ']'
++++ case "$base" in
+++++ CDPATH=
+++++ cd -- /tmp
+++++ pwd -P
++++ physical=/tmp
++++ base=/tmp
++++ '[' -e /tmp/.git ']'
++++ printf '%s\n' /tmp
+++ FM_TEST_TMPDIR=/tmp
+++ FM_TEST_CLEANUP_DIRS=()
++++ mktemp /tmp/.fm-test-cleanup.3073068.XXXXXX
+++ FM_TEST_CLEANUP_REGISTRY=/tmp/.fm-test-cleanup.3073068.zFBiQH
++++ fm_test_pid_identity 3073068
++++ local pid=3073068
++++ FM_STATE_OVERRIDE=/tmp
++++ bash -c '. "$1"; fm_pid_identity "$2"' _ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-wake-lib.sh 3073068
+++ FM_TEST_OWNER_IDENTITY='linux-starttime=197484938 cmdline-hex=62617368002d780074657374732f666d2d73657373696f6e2d6c6f636b2d6261636b67726f756e642d6d6f76652d6c6976652d6532652e746573742e736800'
++++ mktemp /tmp/.fm-test-procevent.3073068.XXXXXX
+++ FM_TEST_PROCEVENT_REGISTRY=/tmp/.fm-test-procevent.3073068.hMWYCM
++++ mktemp /tmp/.fm-test-watcher.3073068.XXXXXX
+++ FM_TEST_WATCHER_REGISTRY=/tmp/.fm-test-watcher.3073068.ZPBjnE
+++ FM_TEST_STUB_MAX_BLOCK_SECONDS=120
+++ export FM_TEST_STUB_MAX_BLOCK_SECONDS
+++ trap fm_test_cleanup EXIT
+++ trap 'fm_test_cleanup; exit 130' INT
+++ trap 'fm_test_cleanup; exit 143' TERM
+++ trap 'fm_test_cleanup; exit 129' HUP
+++ trap 'fm_test_cleanup; exit 131' QUIT
+++ FM_TEST_ORPHAN_MAX_AGE_SECONDS=3600
+++ '[' 0 '!=' 1 ']'
+++ fm_test_reap_orphans
+++ local marker dir mtime now owner_pid owner_identity current_identity
++++ date +%s
+++ now=1791520154
+++ for marker in "$FM_TEST_TMPDIR"/fm-*/.fm-test-fixture
+++ '[' -e /tmp/fm-pr-merge-tests.HHrGHY/.fm-test-fixture ']'
++++ sed -n 1p /tmp/fm-pr-merge-tests.HHrGHY/.fm-test-fixture
+++ owner_pid=3042738
++++ sed -n '2,$p' /tmp/fm-pr-merge-tests.HHrGHY/.fm-test-fixture
+++ owner_identity='linux-starttime=197481020 cmdline-hex=626173680074657374732f666d2d70722d6d657267652e746573742e736800'
+++ case "$owner_pid" in
++++ fm_test_pid_identity 3042738
+++ current_identity='linux-starttime=197481020 cmdline-hex=626173680074657374732f666d2d70722d6d657267652e746573742e736800'
+++ '[' -n 'linux-starttime=197481020 cmdline-hex=626173680074657374732f666d2d70722d6d657267652e746573742e736800' ']'
+++ '[' 'linux-starttime=197481020 cmdline-hex=626173680074657374732f666d2d70722d6d657267652e746573742e736800' = 'linux-starttime=197481020 cmdline-hex=626173680074657374732f666d2d70722d6d657267652e746573742e736800' ']'
+++ continue
++ fm_live_gate opt-in FM_CLAUDE_BG_MOVE_LIVE_E2E claude tmux jq
++ local policy=opt-in vars=FM_CLAUDE_BG_MOVE_LIVE_E2E
++ shift 2
++ local var value rest primary requested=0 disabled_by= tool
++ var_list=()
++ local -a var_list
++ case "$policy" in
++ rest=FM_CLAUDE_BG_MOVE_LIVE_E2E
++ '[' -n FM_CLAUDE_BG_MOVE_LIVE_E2E ']'
++ var=FM_CLAUDE_BG_MOVE_LIVE_E2E
++ '[' FM_CLAUDE_BG_MOVE_LIVE_E2E = FM_CLAUDE_BG_MOVE_LIVE_E2E ']'
++ rest=
++ '[' -n FM_CLAUDE_BG_MOVE_LIVE_E2E ']'
++ var_list+=("$var")
++ '[' -n '' ']'
++ '[' 1 -gt 0 ']'
++ primary=FM_CLAUDE_BG_MOVE_LIVE_E2E
++ for var in "${var_list[@]}"
++ value=1
++ case "$value" in
++ requested=1
++ '[' 1 -eq 0 ']'
++ for tool in "$@"
++ command -v claude
++ continue
++ for tool in "$@"
++ command -v tmux
++ continue
++ for tool in "$@"
++ command -v jq
++ continue
++ export DISABLE_AUTOUPDATER=1
++ DISABLE_AUTOUPDATER=1
++ return 0
++ LAB_SCRIPT=/home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh
+++ claude --version
++ CLAUDE_VERSION='2.1.294 (Claude Code)'
+++ mktemp -d /tmp/fmlab.XXXXXX
++ LAB=/tmp/fmlab.WTLoH1
++ rmdir /tmp/fmlab.WTLoH1
++ MOVED_SHORT=
++ trap cleanup EXIT
++ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh up --harness claude --worker /tmp/fmlab.WTLoH1
++ HOME_DIR=/tmp/fmlab.WTLoH1/home
++ STATE=/tmp/fmlab.WTLoH1/home/state
+++ sed -n 's/^tmux_dir=//p' /tmp/fmlab.WTLoH1/.fm-live-lab
+++ head -n 1
++ TMUX_DIR=/tmp/fml.QYJxHo
+++ sed -n 's/^claude_config_dir=//p' /tmp/fmlab.WTLoH1/.fm-live-lab
+++ head -n 1
++ CONFIG_DIR=
++ PROJECTS=/home/jjrdar/.claude/projects
+++ head -n 1 /tmp/fmlab.WTLoH1/home/state/.lock
++ FRONTEND=3083799
+++ head -n 1 /tmp/fmlab.WTLoH1/home/state/.lock-session
++ OLD_ID=ecfd18dc-6220-4924-98e6-c4090e738430
++ '[' -n ecfd18dc-6220-4924-98e6-c4090e738430 ']'
++ lab_tmux send-keys -t firstmate:main Left
++ env -u TMUX TMUX_TMPDIR=/tmp/fml.QYJxHo tmux send-keys -t firstmate:main Left
++ wait_until 60 have_moved_id
+++ date +%s
++ local deadline=1791520250
++ shift
++ have_moved_id
+++ moved_id
+++ local transcript
+++ for transcript in "$PROJECTS"/*/"$OLD_ID".jsonl
+++ '[' -f /home/jjrdar/.claude/projects/-tmp-fmlab-WTLoH1-home/ecfd18dc-6220-4924-98e6-c4090e738430.jsonl ']'
+++ grep '^{"type":"continued-in",' /home/jjrdar/.claude/projects/-tmp-fmlab-WTLoH1-home/ecfd18dc-6220-4924-98e6-c4090e738430.jsonl
+++ tail -n 1
+++ jq -r '.continuedInSessionId // empty'
++ MOVED_ID=
++ '[' -n '' ']'
+++ date +%s
++ '[' 1791520190 -lt 1791520250 ']'
++ sleep 2
++ have_moved_id
+++ moved_id
+++ local transcript
+++ for transcript in "$PROJECTS"/*/"$OLD_ID".jsonl
+++ '[' -f /home/jjrdar/.claude/projects/-tmp-fmlab-WTLoH1-home/ecfd18dc-6220-4924-98e6-c4090e738430.jsonl ']'
+++ grep '^{"type":"continued-in",' /home/jjrdar/.claude/projects/-tmp-fmlab-WTLoH1-home/ecfd18dc-6220-4924-98e6-c4090e738430.jsonl
+++ tail -n 1
+++ jq -r '.continuedInSessionId // empty'
++ MOVED_ID=7d87b0b8-64c0-4cba-938f-3f9b733b3a94
++ '[' -n 7d87b0b8-64c0-4cba-938f-3f9b733b3a94 ']'
++ MOVED_SHORT=7d87b0b8
++ sleep 5
++ kill -0 3083799
+++ head -n 1 /tmp/fmlab.WTLoH1/home/state/.lock
++ '[' 3083799 = 3083799 ']'
+++ claude agents --json --cwd /tmp/fmlab.WTLoH1/home
+++ jq -r --arg id 7d87b0b8-64c0-4cba-938f-3f9b733b3a94 '.[] | select(.sessionId == $id) | .pid'
++ MOVED_PID=2587321
++ case "$MOVED_PID" in
+++ sed -n 's/^worker_id=//p' /tmp/fmlab.WTLoH1/.fm-live-lab
+++ head -n 1
++ WORKER_ID=labcf2d534d299d-worker
+++ date +%s
++ printf 'needs-decision [at=%s]: background-move live guard wake\n' 1791520200
++ wait_until 120 inherited_cycle_closed
+++ date +%s
++ local deadline=1791520320
++ shift
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520200 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520202 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520204 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520206 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520208 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520210 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520212 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520214 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520216 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520218 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
+++ date +%s
++ '[' 1791520220 -lt 1791520320 ']'
++ sleep 2
++ inherited_cycle_closed
++ grep -q outcome=arming /tmp/fmlab.WTLoH1/home/state/.claude-autoarm-epoch
++ lab_tmux new-window -d -t firstmate: -n moved -c /tmp/fmlab.WTLoH1/home claude attach 7d87b0b8
++ env -u TMUX TMUX_TMPDIR=/tmp/fml.QYJxHo tmux new-window -d -t firstmate: -n moved -c /tmp/fmlab.WTLoH1/home claude attach 7d87b0b8
++ sleep 10
++ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh say /tmp/fmlab.WTLoH1 --window moved 'Lab probe: run no tool or command. Reply with only the word MOVED.'
++ wait_until 240 lock_handed_off
+++ date +%s
++ local deadline=1791520475
++ shift
++ lock_handed_off
+++ head -n 1 /tmp/fmlab.WTLoH1/home/state/.lock
++ '[' 3083799 = 2587321 ']'
+++ date +%s
++ '[' 1791520235 -lt 1791520475 ']'
++ sleep 2
++ lock_handed_off
+++ head -n 1 /tmp/fmlab.WTLoH1/home/state/.lock
++ '[' 3083799 = 2587321 ']'
+++ date +%s
++ '[' 1791520237 -lt 1791520475 ']'
++ sleep 2
++ lock_handed_off
+++ head -n 1 /tmp/fmlab.WTLoH1/home/state/.lock
++ '[' 3083799 = 2587321 ']'
+++ date +%s
++ '[' 1791520239 -lt 1791520475 ']'
++ sleep 2
++ lock_handed_off
+++ head -n 1 /tmp/fmlab.WTLoH1/home/state/.lock
++ '[' 2587321 = 2587321 ']'
+++ head -n 1 /tmp/fmlab.WTLoH1/home/state/.lock-session
++ '[' 7d87b0b8-64c0-4cba-938f-3f9b733b3a94 = 7d87b0b8-64c0-4cba-938f-3f9b733b3a94 ']'
++ kill -0 3083799
++ wait_until 180 moved_session_watches
+++ date +%s
++ local deadline=1791520421
++ shift
++ moved_session_watches
++ local pid
++ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh check /tmp/fmlab.WTLoH1
++ grep -q '^ok watcher'
+++ cat /tmp/fmlab.WTLoH1/home/state/.watch.lock/pid
++ pid=
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ return 1
+++ date +%s
++ '[' 1791520241 -lt 1791520421 ']'
++ sleep 2
++ moved_session_watches
++ local pid
++ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh check /tmp/fmlab.WTLoH1
++ grep -q '^ok watcher'
+++ cat /tmp/fmlab.WTLoH1/home/state/.watch.lock/pid
++ pid=3134792
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3134792 = 2587321 ']'
+++ ps -o ppid= -p 3134792
+++ tr -d ' '
++ pid=3134744
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3134744 = 2587321 ']'
+++ ps -o ppid= -p 3134744
+++ tr -d ' '
++ pid=1311593
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 1311593 = 2587321 ']'
+++ ps -o ppid= -p 1311593
+++ tr -d ' '
++ pid=1311592
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 1311592 = 2587321 ']'
+++ ps -o ppid= -p 1311592
+++ tr -d ' '
++ pid=2
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 2 = 2587321 ']'
+++ ps -o ppid= -p 2
+++ tr -d ' '
++ pid=1
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ return 1
+++ date +%s
++ '[' 1791520243 -lt 1791520421 ']'
++ sleep 2
++ moved_session_watches
++ local pid
++ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh check /tmp/fmlab.WTLoH1
++ grep -q '^ok watcher'
+++ cat /tmp/fmlab.WTLoH1/home/state/.watch.lock/pid
++ pid=3134792
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3134792 = 2587321 ']'
+++ ps -o ppid= -p 3134792
+++ tr -d ' '
++ pid=3134744
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3134744 = 2587321 ']'
+++ ps -o ppid= -p 3134744
+++ tr -d ' '
++ pid=1311593
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 1311593 = 2587321 ']'
+++ ps -o ppid= -p 1311593
+++ tr -d ' '
++ pid=1311592
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 1311592 = 2587321 ']'
+++ ps -o ppid= -p 1311592
+++ tr -d ' '
++ pid=2
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 2 = 2587321 ']'
+++ ps -o ppid= -p 2
+++ tr -d ' '
++ pid=1
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ return 1
+++ date +%s
++ '[' 1791520246 -lt 1791520421 ']'
++ sleep 2
++ moved_session_watches
++ local pid
++ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh check /tmp/fmlab.WTLoH1
++ grep -q '^ok watcher'
+++ cat /tmp/fmlab.WTLoH1/home/state/.watch.lock/pid
++ pid=3134792
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3134792 = 2587321 ']'
+++ ps -o ppid= -p 3134792
+++ tr -d ' '
++ pid=3134744
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3134744 = 2587321 ']'
+++ ps -o ppid= -p 3134744
+++ tr -d ' '
++ pid=1311593
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 1311593 = 2587321 ']'
+++ ps -o ppid= -p 1311593
+++ tr -d ' '
++ pid=1311592
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 1311592 = 2587321 ']'
+++ ps -o ppid= -p 1311592
+++ tr -d ' '
++ pid=2
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 2 = 2587321 ']'
+++ ps -o ppid= -p 2
+++ tr -d ' '
++ pid=1
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ return 1
+++ date +%s
++ '[' 1791520248 -lt 1791520421 ']'
++ sleep 2
++ moved_session_watches
++ local pid
++ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh check /tmp/fmlab.WTLoH1
++ grep -q '^ok watcher'
+++ cat /tmp/fmlab.WTLoH1/home/state/.watch.lock/pid
++ pid=3134792
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3134792 = 2587321 ']'
+++ ps -o ppid= -p 3134792
+++ tr -d ' '
++ pid=3134744
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3134744 = 2587321 ']'
+++ ps -o ppid= -p 3134744
+++ tr -d ' '
++ pid=1311593
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 1311593 = 2587321 ']'
+++ ps -o ppid= -p 1311593
+++ tr -d ' '
++ pid=1311592
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 1311592 = 2587321 ']'
+++ ps -o ppid= -p 1311592
+++ tr -d ' '
++ pid=2
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 2 = 2587321 ']'
+++ ps -o ppid= -p 2
+++ tr -d ' '
++ pid=1
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ return 1
+++ date +%s
++ '[' 1791520251 -lt 1791520421 ']'
++ sleep 2
++ moved_session_watches
++ local pid
++ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh check /tmp/fmlab.WTLoH1
++ grep -q '^ok watcher'
+++ cat /tmp/fmlab.WTLoH1/home/state/.watch.lock/pid
++ pid=3134792
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3134792 = 2587321 ']'
+++ ps -o ppid= -p 3134792
+++ tr -d ' '
++ pid=3134744
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3134744 = 2587321 ']'
+++ ps -o ppid= -p 3134744
+++ tr -d ' '
++ pid=1311593
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 1311593 = 2587321 ']'
+++ ps -o ppid= -p 1311593
+++ tr -d ' '
++ pid=1311592
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 1311592 = 2587321 ']'
+++ ps -o ppid= -p 1311592
+++ tr -d ' '
++ pid=2
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 2 = 2587321 ']'
+++ ps -o ppid= -p 2
+++ tr -d ' '
++ pid=1
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ return 1
+++ date +%s
++ '[' 1791520253 -lt 1791520421 ']'
++ sleep 2
++ moved_session_watches
++ local pid
++ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh check /tmp/fmlab.WTLoH1
++ grep -q '^ok watcher'
+++ cat /tmp/fmlab.WTLoH1/home/state/.watch.lock/pid
++ pid=3145804
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3145804 = 2587321 ']'
+++ ps -o ppid= -p 3145804
+++ tr -d ' '
++ pid=3145079
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3145079 = 2587321 ']'
+++ ps -o ppid= -p 3145079
+++ tr -d ' '
++ pid=3144562
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3144562 = 2587321 ']'
+++ ps -o ppid= -p 3144562
+++ tr -d ' '
++ pid=3144057
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 3144057 = 2587321 ']'
+++ ps -o ppid= -p 3144057
+++ tr -d ' '
++ pid=2587321
++ for _ in 1 2 3 4 5 6 7 8 9 10 11 12
++ case "$pid" in
++ '[' 2587321 = 2587321 ']'
++ return 0
++ pass 'session-lock live (2.1.294 (Claude Code)): a left-arrow background move hands the live front-end'\''s lock and supervision to the moved session'
++ printf 'ok - %s\n' 'session-lock live (2.1.294 (Claude Code)): a left-arrow background move hands the live front-end'\''s lock and supervision to the moved session'
+ok - session-lock live (2.1.294 (Claude Code)): a left-arrow background move hands the live front-end's lock and supervision to the moved session
++ cleanup
++ '[' -n 7d87b0b8 ']'
++ claude stop 7d87b0b8
++ claude rm 7d87b0b8
++ '[' '!' -e /tmp/fmlab.WTLoH1/.fm-live-lab ']'
++ /home/jjrdar/.no-mistakes/worktrees/f9d4221d7e38/01M4FEH2W29X6T7NWG9CCEMQM6/bin/fm-live-lab.sh down /tmp/fmlab.WTLoH1
+exit=0
