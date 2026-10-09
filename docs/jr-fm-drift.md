@@ -5,20 +5,23 @@ Read this before resolving a sync conflict, and add a row whenever a sync forces
 
 ## Sync runbook
 
-Three ordered steps in `bin/jr-fm-sync-upstream.sh`; run it with no argument to see which is next.
-Each step refuses to run before the one it depends on, and every step is safe to rerun.
-Start from `main` with a clean tree and an idle fleet (a live session re-reads `AGENTS.md`).
+One fork, one clone: `jroethel/firstmate` is a public GitHub fork of `kunchenguid/firstmate`, and its main has one writer, the project clone `projects/firstmate`, through `bin/jr-fm-land.sh`.
+An upstream sync is an ordinary local-only worker task on the Firstmate project, never a step run in a home.
 
-1. `bin/jr-fm-sync-upstream.sh 1 "keyword"` lists what upstream added and searches its open PRs and issues for the keyword, so you do not rebuild a fix that already exists.
-2. `bin/jr-fm-sync-upstream.sh 2` merges `upstream/main` on scratch branch `sync-upstream`, runs the doc and lint checks plus the tests for every file both sides changed, and fast-forwards `main`.
+1. In the worker copy, on the task's own `fm/<id>` branch, run `bin/jr-fm-sync-upstream.sh "keyword"`; it refuses on `main`.
+   It lists what upstream added, searches upstream's open PRs and issues for the keyword so you do not rebuild a fix that already exists, and merges `upstream/main` into the branch.
+2. It stops on conflicts, naming the files; resolve them using the decisions below, add a row here for each new choice, and rerun the script, which stages the resolved files and commits the merge.
+   git rerere replays resolutions recorded earlier in the clone's shared `.git/rr-cache`.
+3. It then runs the doc and lint checks plus the tests for every file both sides changed, and stops.
    The real-Herdr tests (about 12 minutes) run only with `--full`.
-   It stops on conflicts, naming the files; resolve them using the decisions below and rerun step 2, which stages the resolved files and commits the merge itself.
-3. `bin/jr-fm-sync-upstream.sh 3` pushes `origin main` (yours to fire) and clears the progress markers, which live under `.git/jr-fm-sync`.
+4. Firstmate lands the approved branch with `bin/jr-fm-land.sh <id>`, the landing for every Firstmate change, not only syncs.
+   It fetches origin, refuses unless `origin/main` is an ancestor of the task branch, fast-forwards the clone's main through `bin/fm-merge-local.sh`, pushes it to origin, and prints the `/updatefirstmate` reminder.
 
-Outside the script:
+Outside the scripts:
 
-- Other hosts: `git pull --ff-only origin main`.
-- Running firstmate home: `/updatefirstmate` (it runs `bin/fm-update.sh`; reread `AGENTS.md` when it says so).
+- Every home, on every host, is pull-only: its tracked files change only through `/updatefirstmate` (it runs `bin/fm-update.sh`; reread `AGENTS.md` when it says so), never a raw `git pull`, a commit, a merge, or a push.
+- The delta against upstream is the compare view <https://github.com/kunchenguid/firstmate/compare/main...jroethel:main>.
+- GitHub's Sync fork button, the `merge-upstream` API, and `gh repo sync --force` are never used: the first two stop on any conflict and run none of the worker merge's checks, and the last hard-resets fork main to upstream.
 - Tool prerequisites: `bin/fm-install-actionlint.sh ~/.local/bin` (the script puts that on PATH); `ruby` for `tests/fm-test-run.test.sh`.
 
 ## Accepted upstream over the fork

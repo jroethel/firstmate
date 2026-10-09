@@ -1,138 +1,91 @@
 #!/usr/bin/env bash
-# Sync this fork's main with kunchenguid/firstmate, in three ordered steps.
-# Run with no argument to see which step is next. Each step refuses to run
-# before the one it depends on, and every step is safe to rerun.
-#   jr-fm-sync-upstream.sh 1 ["keyword"]  check: what upstream already has (open PRs and issues
-#                                         matching the keyword, commits we are behind)
-#   jr-fm-sync-upstream.sh 2 [--full]     sync: merge upstream/main on scratch branch sync-upstream,
-#                                         run doc + lint + tests for files both sides changed,
-#                                         fast-forward main. Stops on conflicts; fix, rerun 2.
-#                                         The real-Herdr tests (about 12 minutes) need --full.
-#   jr-fm-sync-upstream.sh 3              publish: git push origin main, then reminders. Yours to fire.
-# git rerere replays a conflict resolution recorded earlier.
+# Merge kunchenguid/firstmate's main into the current task branch, in a worker
+# copy of the project clone. It refuses on main and on a detached HEAD: the
+# merge is an ordinary worker change, published by the ordinary landing
+# (bin/jr-fm-land.sh), and the task branch is the only progress state.
+#   jr-fm-sync-upstream.sh [--full] ["keyword"]
+# A first run fetches upstream, lists the commits the branch is behind (and,
+# with a keyword, upstream's open PRs and issues matching it, so you do not
+# rebuild a fix that already exists), then merges upstream/main. It stops on
+# conflicts; resolve them by docs/jr-fm-drift.md and rerun, which stages the
+# resolved files and commits the merge. Then it runs the doc audit, lint, and
+# the tests for files both sides changed, and stops. The real-Herdr tests
+# (about 12 minutes) need --full. Every run is safe to repeat.
+# git rerere replays a conflict resolution recorded earlier in the clone.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PATH="$HOME/.local/bin:$PATH"  # pinned actionlint lives here (bin/fm-install-actionlint.sh)
-BR=sync-upstream UP=kunchenguid/firstmate
-STATE=$(git rev-parse --git-path jr-fm-sync)
+UP=kunchenguid/firstmate
 die() { echo "error: $*" >&2; exit 1; }
-done_step() { [ -e "$STATE/$1" ]; }
-mark() { mkdir -p "$STATE"; : > "$STATE/$1"; }
-need() { done_step "$1" || die "step $1 has not been run since the last publish; run: $0 $1"; }
 
-status() {
-  local n next=
-  for n in 1 2 3; do
-    if done_step "$n"; then echo "  [x] step $n"; else echo "  [ ] step $n"; [ -n "$next" ] || next=$n; fi
-  done
-  [ -z "$next" ] || echo "next: $0 $next"
-}
+FULL=0 KW=
+for a in "$@"; do
+  case "$a" in
+    --full) FULL=1 ;;
+    -*) die "usage: $0 [--full] [\"keyword\"]" ;;
+    *) KW=$a ;;
+  esac
+done
+cur=$(git branch --show-current)
+case "$cur" in
+  main) die "on main; run this on the task's own fm/<id> branch in a worker copy" ;;
+  "") die "detached HEAD; run this on the task's own fm/<id> branch in a worker copy" ;;
+esac
+RR=(-c rerere.enabled=true)
 
-step1() {
+if [ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
+  [ -z "$(git status --porcelain --untracked-files=no)" ] || die "uncommitted changes on $cur; commit them first"
   git fetch -q upstream
-  local behind
-  behind=$(git rev-list --count main..upstream/main)
-  echo "commits behind upstream: $behind"
-  git log --oneline main..upstream/main | head -30
-  if [ -n "${1:-}" ]; then
-    echo "--- upstream open PRs matching \"$1\""
-    gh search prs --repo "$UP" --state open "$1" --limit 10 --json number,title,url --template '{{range .}}#{{.number}} {{.title}} {{.url}}{{"\n"}}{{end}}'
-    echo "--- upstream issues matching \"$1\""
-    gh search issues --repo "$UP" "$1" --limit 10 --json number,state,title,url --template '{{range .}}#{{.number}} [{{.state}}] {{.title}} {{.url}}{{"\n"}}{{end}}'
+  echo "commits behind upstream: $(git rev-list --count HEAD..upstream/main)"
+  git log --oneline -30 HEAD..upstream/main
+  if [ -n "$KW" ]; then
+    echo "--- upstream open PRs matching \"$KW\""
+    gh search prs --repo "$UP" --state open "$KW" --limit 10 --json number,title,url --template '{{range .}}#{{.number}} {{.title}} {{.url}}{{"\n"}}{{end}}'
+    echo "--- upstream issues matching \"$KW\""
+    gh search issues --repo "$UP" "$KW" --limit 10 --json number,state,title,url --template '{{range .}}#{{.number}} [{{.state}}] {{.title}} {{.url}}{{"\n"}}{{end}}'
   else
     echo "(no keyword given: pass one to also search upstream PRs and issues)"
   fi
-  mark 1
-}
+  git "${RR[@]}" merge --no-edit upstream/main || true
+fi
 
-step2() {
-  need 1
-  local FULL=0 cur
-  [ "${1:-}" != --full ] || FULL=1
-  cur=$(git branch --show-current)
-  if [ "$cur" = main ]; then
-    [ -z "$(git status --porcelain --untracked-files=no)" ] || die "uncommitted changes on main; commit or stash first"
-    git config rerere.enabled true
-    git fetch -q upstream
-    if [ "$(git rev-list --count main..upstream/main)" -eq 0 ]; then
-      echo "already up to date with upstream."
-      mark 2
-      return 0
+# Stage what is resolved and commit the merge, then check.
+if [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
+  still=''
+  for f in $(git diff --name-only --diff-filter=U); do
+    if grep -qE '^(<<<<<<<|>>>>>>>) ' "$f"; then
+      echo "conflict markers remain in: $f" >&2
+      still=1
+    else
+      git add "$f"
     fi
-    git show-ref --verify --quiet "refs/heads/$BR" && die "$BR exists but you are on main; git switch $BR to resume it, or git branch -D $BR to drop it"
-    git switch -c "$BR"
-    git merge upstream/main || true
-  elif [ "$cur" != "$BR" ]; then
-    die "on $cur; git switch main first"
-  fi
-
-  # On $BR: stage what is resolved, commit the merge, then check and finish.
-  if [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
-    local still='' f
-    for f in $(git diff --name-only --diff-filter=U); do
-      if grep -qE '^(<<<<<<<|>>>>>>>) ' "$f"; then
-        echo "conflict markers remain in: $f" >&2
-        still=1
-      else
-        git add "$f"
-      fi
-    done
-    [ -z "$still" ] || die "resolve the files above, then rerun: $0 2"
-    git commit --no-edit -q
-    echo "merge committed."
-  fi
-  [ -z "$(git status --porcelain --untracked-files=no)" ] || die "uncommitted changes on $BR"
-  git merge-base --is-ancestor upstream/main HEAD || die "$BR does not contain upstream/main"
-
-  # Tests: files both sides changed since the merge base, plus each one's own test.
-  local base overlap tests=() t excl=()
-  base=$(git merge-base main upstream/main)
-  overlap=$(comm -12 <(git diff --name-only "$base" main | sort) <(git diff --name-only "$base" upstream/main | sort))
-  for f in $overlap; do
-    case "$f" in
-      tests/*.test.sh) t=$f ;;
-      bin/*.sh) t=tests/$(basename "$f" .sh).test.sh ;;
-      *) continue ;;
-    esac
-    [ -f "$t" ] && tests+=("$t")
   done
-  echo "files both sides changed: ${overlap:-none}"
-  bash bin/fm-doc-audience-check.sh
-  bash bin/fm-lint.sh
-  if [ "${#tests[@]}" -gt 0 ]; then
-    [ "$FULL" = 1 ] || excl=(--exclude-family real-herdr-gated)
-    # DISABLE_AUTOUPDATER and TYPESAFE_API_KEY leak into the dispatch tests (docs/jr-fm-drift.md)
-    env -u DISABLE_AUTOUPDATER -u TYPESAFE_API_KEY bash bin/fm-test-run.sh ${excl[@]+"${excl[@]}"} "${tests[@]}"
-  fi
+  [ -z "$still" ] || die "resolve the files above by docs/jr-fm-drift.md, then rerun: $0"
+  git "${RR[@]}" commit --no-edit -q
+  echo "merge committed."
+fi
+[ -z "$(git status --porcelain --untracked-files=no)" ] || die "uncommitted changes on $cur"
+git merge-base --is-ancestor upstream/main HEAD || die "$cur does not contain upstream/main; rerun: $0"
 
-  git switch main
-  git merge --ff-only "$BR"
-  git branch -d "$BR"
-  echo "main synced to upstream."
-  mark 2
-}
-
-step3() {
-  need 2
-  [ "$(git branch --show-current)" = main ] || die "on $(git branch --show-current); git switch main first"
-  git fetch -q origin
-  local ahead
-  ahead=$(git rev-list --count origin/main..main)
-  if [ "$ahead" -gt 0 ]; then
-    git push origin main
-    echo "pushed $ahead commit(s)."
-  else
-    echo "origin/main is already current."
-  fi
-  rm -rf "$STATE"
-  echo "Other hosts: git pull --ff-only origin main"
-  echo "Running firstmate session: /updatefirstmate (reread AGENTS.md when it says so)"
-}
-
-case "${1:-}" in
-  1) shift; step1 "$@" ;;
-  2) shift; step2 "$@" ;;
-  3) step3 ;;
-  "") status ;;
-  *) die "usage: $0 [1 [keyword] | 2 [--full] | 3]" ;;
-esac
+# Tests: files both sides changed since the merge base of fork main (the
+# branch's starting point) and upstream, plus each one's own test.
+base=$(git merge-base origin/main upstream/main)
+overlap=$(comm -12 <(git diff --name-only "$base" origin/main | sort) <(git diff --name-only "$base" upstream/main | sort))
+tests=() excl=()
+for f in $overlap; do
+  case "$f" in
+    tests/*.test.sh) t=$f ;;
+    bin/*.sh) t=tests/$(basename "$f" .sh).test.sh ;;
+    *) continue ;;
+  esac
+  [ -f "$t" ] && tests+=("$t")
+done
+echo "files both sides changed: ${overlap:-none}"
+bash bin/fm-doc-audience-check.sh
+bash bin/fm-lint.sh
+if [ "${#tests[@]}" -gt 0 ]; then
+  [ "$FULL" = 1 ] || excl=(--exclude-family real-herdr-gated)
+  # DISABLE_AUTOUPDATER and TYPESAFE_API_KEY leak into the dispatch tests (docs/jr-fm-drift.md)
+  env -u DISABLE_AUTOUPDATER -u TYPESAFE_API_KEY bash bin/fm-test-run.sh ${excl[@]+"${excl[@]}"} "${tests[@]}"
+fi
+echo "$cur contains upstream/main and passed the checks; land it as an ordinary task (bin/jr-fm-land.sh)."
