@@ -50,9 +50,12 @@ muse is the one verified adapter that restores the cancelled prompt back into it
 The clear is refused before anything is sent when the recorded backend cannot deliver it.
 
 `exit` reads the composer's state before typing the exit command and requires the exact `empty` verdict; a `pending` verdict refuses by naming the pending text, and any other verdict (`unknown`, `pending-unproven`, or an unreadable read) refuses as not proven empty, matching the fail-safe contract every other consumer that can overwrite composer input follows.
-`exit` also refuses, naming the dialog as `blocked on a prompt`, when the screen shows a recognised dialog that a further Enter would answer, whether the dialog was open before the exit command was typed or the submitting Enter opened it; it sends no Escape and chooses no option, so closing the dialog is left to the operator.
+When the screen shows a recognised dialog that a further Enter would answer, whether it was open before the exit command was typed or the submitting Enter opened it, `exit` never sends that Enter.
+A dialog that is itself an exit confirmation is answered once with the harness's own exit option, sent as that option's key, and the work the dialog says it stops is reported; Claude's background-work picker is answered with its `1` (Exit and stop tasks), because its other exit option keeps the agent running headless after the pane exits.
+Any other recognised dialog, or one still showing when the wait after that answer runs out, refuses with `blocked on a prompt` and sends no Escape.
 A stopped agent whose pane still shows the dialog text is not refused.
-[`fm_composer_blocking_dialog`](../bin/fm-composer-lib.sh) owns the recognised set, which today is only Claude's background-task exit picker; [its verification record](verification/runtime-backends.md#claude-background-task-exit-picker) lists the dialogs that are not covered.
+[`fm_composer_blocking_dialog`](../bin/fm-composer-lib.sh) owns the recognised set, which today is only Claude's background-task exit picker, and [`fm_control_exit_dialog_key`](../bin/fm-control-lib.sh) owns which of them have an exit answer; [the picker's verification record](verification/runtime-backends.md#claude-background-task-exit-picker) lists the dialogs that are not covered.
+A view that hides the composer behind its own toggle, Claude's detailed-transcript view (ctrl+o), is closed with that toggle before the composer is read, and `exit` refuses when the view does not close.
 
 **Teardown and discard are not verbs and will not become verbs.**
 `exit` stops an agent and preserves everything else.

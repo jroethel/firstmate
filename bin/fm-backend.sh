@@ -808,6 +808,35 @@ fm_backend_send_key() {  # <backend> <target> <key> [expected-label]
   esac
 }
 
+# fm_backend_leave_hiding_view: when the pane shows a view that hides the
+# composer behind its own toggle (bin/fm-composer-lib.sh's
+# fm_composer_hiding_view), press that toggle once and prove the view is gone.
+# Only the worker-directed paths call it - the steering doorbell
+# (bin/fm-task-inbox-lib.sh) and fm-control exit - never the shared submit,
+# which also types into the captain's own session.
+# 0 when no such view is shown or it closed; 1, with the reason on stderr,
+# when the toggle could not be sent or the view is still there. A backend
+# without a viewport capture, or an unreadable viewport, changes nothing.
+fm_backend_leave_hiding_view() {  # <backend> <target> [expected-label]
+  local backend=$1 target=$2 label=${3:-} screen view key
+  fm_backend_visible_capture_supported "$backend" || return 0
+  fm_backend_source "$backend" || return 0
+  screen=$(fm_backend_visible_capture "$backend" "$target" "$label" 2>/dev/null) || return 0
+  view=$(fm_composer_hiding_view "$screen") || return 0
+  key=${view#*$'\t'}
+  view=${view%%$'\t'*}
+  fm_backend_send_key "$backend" "$target" "$key" "$label" >/dev/null 2>&1 || {
+    echo "error: the composer is hidden by the $view and its $key toggle could not be sent" >&2
+    return 1
+  }
+  sleep 0.3
+  if ! screen=$(fm_backend_visible_capture "$backend" "$target" "$label" 2>/dev/null) \
+     || fm_composer_hiding_view "$screen" >/dev/null; then
+    echo "error: the composer is still hidden by the $view after its $key toggle" >&2
+    return 1
+  fi
+}
+
 # fm_backend_send_text_submit: type text once, then submit and verify,
 # retrying only the submission (never retyping). Echoes the backend's
 # proof-carrying verdict; callers require exact empty for confirmed delivery.

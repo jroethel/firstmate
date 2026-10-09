@@ -784,6 +784,100 @@ test_matrix_claude_titled_top_rule() {
   pass "matrix: claude's titled top rule proves an idle composer empty and a draft pending (#5601, #5558)"
 }
 
+test_matrix_claude_titled_wrapped_draft() {
+  # A steering doorbell typed into a titled Claude composer wraps onto a second
+  # row under the title (captured live 2026-10-09, Claude Code 2.1.294 on herdr
+  # 0.9.3, a named session). Only a glyph row sitting directly on its closing
+  # rule used to count as titled, so the wrapped doorbell read `unknown`, the
+  # Herdr payload proof could not see it, and every doorbell and re-ring
+  # reported "did not reach" (composer-label-steer-block, issue #16).
+  local claude_idle rule title top bottom footer row1 row2 screen short
+  claude_idle=$(printf 'claude\tidle')
+  rule='────────────────────────────────────────────────────────────────────────────'
+  title=' Firstmate operational inbox message (3) '
+  top="${rule}${title}─"
+  bottom="${rule}────────────────────────────────────────── "
+  bottom=${bottom% }
+  row1=$'❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your \'lab-worker.inbox\' steering inbox, read and'
+  row2='  act on each in numeric order, then mv each into its handled/.'
+  footer=$'  [----------] 4% (35.7k/1M) | Opus 5.5 (HIGH) | proj | main\n  ⏵⏵ bypass permissions on · 1 shell'
+  screen="● ready"$'\n'"$top"$'\n'"$row1"$'\n'"$row2"$'\n'"$bottom"$'\n'"$footer"
+  [ "${top//[!─]/}" != "$top" ] || fail "fixture: the top rule must carry a title"
+  assert_screen "titled wrapped draft on herdr" pending "$CAPS_STYLED" "$screen" '' "$claude_idle"
+  assert_screen "titled wrapped draft on zellij" pending "$CAPS_STYLED_NOID" "$screen"
+  assert_screen "titled wrapped draft on tmux, cursor on the wrap row" pending "$CAPS_TMUX" "$screen" 3 probe-absent
+  assert_screen "titled wrapped draft on plain backends" unknown "$CAPS_PLAIN" "$screen"
+  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen") \
+    || fail "the wrapped draft under a titled rule should be selectable"
+  [ "$out" = "${row1#❯ } ${row2#  }" ] || fail "the wrapped draft should be read whole, got '$out'"
+  # Width is still proven: a title rule narrower than its closing rule is not
+  # that composer's top edge, wrapped or not.
+  short="${rule}${title}"$'\n'"$row1"$'\n'"$row2"$'\n'"$bottom"
+  assert_screen "titled wrapped draft with a short title rule" unknown "$CAPS_STYLED_NOID" "$short"
+  pass "matrix: a draft wrapping under a titled Claude rule reads pending and whole (#16)"
+}
+
+test_matrix_claude_slash_command_menu() {
+  # Claude Code 2.1.294 draws a typed slash command's completion menu directly
+  # under the composer, its selected entry led by the composer's own `❯`
+  # (captured live 2026-10-09 on herdr 0.9.3). That entry was selected as the
+  # composer, the menu rows read as typed text, and a typed /exit was judged
+  # unsent and cleared, so fm-control exit and relaunch refused every Claude
+  # worker on herdr.
+  local rule top menu screen titled out
+  rule='──────────────────────────────────────────────────'
+  top='──────────────────── Firstmate operational input ─'
+  menu=$'  ❯ /exit                                 Exit the CLI\n    /context                              Visualize current context usage as a colored grid\n    /usage-credits                        Configure usage credits or request them from your admin when you hit a\n                                          limit'
+  screen="✻ Cogitated for 16s"$'\n\n'"$rule"$'\n❯'"$NBSP"$'/exit\n'"$rule"$'\n'"$menu"
+  assert_screen "typed /exit above its menu on herdr" pending "$CAPS_STYLED" "$screen" '' probe-absent
+  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$screen")
+  [ "$out" = /exit ] || fail "the composer, not the menu, should hold the typed /exit, got '$out'"
+  titled="$top"$'\n❯'"$NBSP"$'/exit\n'"$rule"$'\n'"$menu"
+  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" "$titled")
+  [ "$out" = /exit ] || fail "a titled composer should hold the typed /exit above its menu, got '$out'"
+  # The menu reading is bounded: an entry that does not complete the typed
+  # command, an envelope holding no slash command, or a rule inside the run
+  # leaves the lower glyph row selected, so a payload proof still refuses.
+  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" \
+    "$rule"$'\n❯'"$NBSP"$'/exit\n'"$rule"$'\n  ❯ /export      Export the conversation')
+  [ "$out" = '/export Export the conversation' ] || fail "a non-completing entry must stay the selection, got '$out'"
+  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" \
+    "$rule"$'\n❯'"$NBSP"$'hello\n'"$rule"$'\n  ❯ /exit        Exit the CLI')
+  [ "$out" = '/exit Exit the CLI' ] || fail "a live glyph row under a non-command envelope must keep winning, got '$out'"
+  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" \
+    "$rule"$'\n❯'"$NBSP"$'/exit\n'"$rule"$'\n  ❯ /exit        Exit the CLI\n'"$rule")
+  [ "$out" = '/exit Exit the CLI' ] || fail "a rule inside the menu run must refuse the menu reading, got '$out'"
+  out=$(fm_composer_extract_selected_content "$CAPS_STYLED_NOID" \
+    "$rule"$'\n❯'"$NBSP"$'/ex\n'"$rule"$'\n  ❯ /exit        Exit the CLI\n    /export      Export')
+  [ "$out" = /ex ] || fail "a partly typed command should stay the composer above its menu, got '$out'"
+  pass "matrix: Claude's slash-command menu under the composer is its menu, not a second composer"
+}
+
+test_claude_detailed_transcript_view_is_a_hiding_view() {
+  # Recorded live 2026-10-09 on Claude Code 2.1.294: ctrl+o on an idle pane
+  # replaces the composer with the detailed transcript, so every steer read
+  # `unknown` and reported "did not reach" until something left the view.
+  local rule view out rc
+  rule='───────────────────────────────────────────────────────'
+  view="● ready"$'\n'"✻ Cogitated for 6s · done 1:06 AM"$'\n\n'"${ESC}[2m${rule}${ESC}[0m"$'\n'
+  view+="  ${ESC}[38;2;153;153;153mShowing detailed transcript · ctrl+o to toggle · ctrl+e to show all${ESC}[0m          verbose"
+  out=$(fm_composer_hiding_view "$view"); rc=$?
+  [ "$rc" -eq 0 ] || fail "the detailed-transcript view should be recognised"
+  [ "$out" = "Claude detailed-transcript view"$'\t'"C-o" ] || fail "the view should name its own toggle, got '$out'"
+  out=$(LC_ALL=C fm_composer_hiding_view "$view") || fail "the view should be recognised under LC_ALL=C"
+  out=$(fm_composer_hiding_view "$rule"$'\n'"  Showing detailed transcript · ctrl+o to toggle"); rc=$?
+  [ "$rc" -eq 0 ] || fail "the footer without later hints should still be the view"
+  # Not the view: the footer quoted mid-screen above a live composer, a last
+  # row with no rule above it, or a row that only starts with the same words.
+  out=$(fm_composer_hiding_view "$rule"$'\n'"  Showing detailed transcript · ctrl+o to toggle"$'\n'"$rule"$'\n❯'"$NBSP"$'\n'"$rule"); rc=$?
+  [ "$rc" -eq 1 ] && [ -z "$out" ] || fail "a quoted footer above a composer is not the view, got '$out'"
+  out=$(fm_composer_hiding_view "transcript line"$'\n'"  Showing detailed transcript · ctrl+o to toggle"); rc=$?
+  [ "$rc" -eq 1 ] || fail "a footer row with no rule above it is not the view"
+  out=$(fm_composer_hiding_view "$rule"$'\n'"  Showing detailed transcript · ctrl+o to toggles everything"); rc=$?
+  [ "$rc" -eq 1 ] || fail "a row that only starts with the footer words is not the view"
+  pass "Claude's detailed-transcript view is recognised by its ruled footer and names ctrl+o"
+}
+
 test_matrix_kimi_bordered_shell_glyph_box() {
   # Kimi's bordered `│ > │` composer - the shape fm-spawn.sh's retired
   # spawn-local regex used to own. Now the shared owner proves it everywhere,
@@ -1036,6 +1130,9 @@ test_matrix_pi_dollar_status_footer_is_empty
 test_matrix_opencode_leftbar_signals
 test_matrix_grok_titled_bottom_border
 test_matrix_claude_titled_top_rule
+test_matrix_claude_titled_wrapped_draft
+test_matrix_claude_slash_command_menu
+test_claude_detailed_transcript_view_is_a_hiding_view
 test_matrix_kimi_bordered_shell_glyph_box
 test_matrix_claude_inside_zellij_ansi_dump
 test_strict_blank_row_divergence
@@ -1141,6 +1238,26 @@ test_background_exit_picker_stays_pending_and_blocks_retry() {
   pass "the Claude background-task exit picker stays pending and receives no confirming Enter"
 }
 
+test_exit_picker_lists_the_work_it_stops() {
+  local out
+  # The order Claude Code 2.1.294 draws (live capture, Herdr lab).
+  out=$(fm_composer_blocking_dialog_stops "$(printf '%s\n' \
+    '  Background work is running' \
+    '  The following will stop when you exit:' \
+    '  shell · sleep 900' \
+    '  agent · review the diff' \
+    '  ❯ 1. Exit and stop tasks' \
+    '    2. Move to background and exit' \
+    '    3. Stay' \
+    '  Enter to confirm · Esc to cancel')")
+  [ "$out" = "shell · sleep 900"$'\n'"agent · review the diff" ] || fail "the listed work should be read, got '$out'"
+  out=$(fm_composer_blocking_dialog_stops "$(exit_picker_screen)")
+  [ "$out" = "shell · sleep 300" ] || fail "the list should end at an option or the footer, got '$out'"
+  out=$(fm_composer_blocking_dialog_stops 'nothing to see')
+  [ -z "$out" ] || fail "a screen without the list should print nothing, got '$out'"
+  pass "the exit picker's stopping work is read for the answer's report"
+}
+
 # The picker's own text, shown the way a worker pane shows it when it prints
 # this repository's diff, verification note, or a test fixture: quoted above a
 # normal composer. No picker is open, so the next Enter confirms nothing.
@@ -1232,6 +1349,7 @@ test_quoted_exit_picker_text_is_not_a_dialog() {
 }
 
 test_background_exit_picker_stays_pending_and_blocks_retry
+test_exit_picker_lists_the_work_it_stops
 test_dialog_heading_and_footer_must_be_the_recorded_lines
 test_dialog_note_skips_the_match_when_no_sink_is_set
 test_quoted_exit_picker_text_is_not_a_dialog

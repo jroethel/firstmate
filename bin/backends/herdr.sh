@@ -3107,6 +3107,9 @@ fm_backend_herdr_normalize_key() {  # <key>
     # C-u clears a composer line. fm-send.sh's muse interrupt path needs it to
     # drop the prompt muse restores into the composer after Escape.
     C-u|c-u|ctrl+u|Ctrl+U) printf 'ctrl+u' ;;
+    # C-o toggles Claude Code's detailed-transcript view back to its composer
+    # (bin/fm-backend.sh's fm_backend_leave_hiding_view).
+    C-o|c-o|ctrl+o|Ctrl+O) printf 'ctrl+o' ;;
     *) printf '%s' "$1" ;;
   esac
 }

@@ -1240,6 +1240,8 @@ The pre-Enter payload proof then judged the typed command unsent, pressed Ctrl+U
 The fix captures the FULL VISIBLE VIEWPORT for every herdr adapter composer read (`pane read --source visible [--format ansi]`, `fm_backend_herdr_composer_state` and `fm_backend_herdr_composer_content`): the composer is by definition inside the viewport, and the viewport is the one bound that always contains it.
 The shared inbox pending-line confirmation read (`bin/fm-task-inbox-lib.sh`) stays a bounded tail on every backend, herdr included; its payloads are task lines, not slash commands, so the popup shape does not arise there.
 The popup rows sit below the composer's closing rule, which is a structural edge row, so the shared classifier still selects only the composer and the menu rows never read as typed text.
+Claude Code 2.1.294 (measured 2026-10-09 on Herdr 0.9.3) leads the popup's selected entry with the composer's own `❯`, so that entry read as a live composer below the real one and swallowed the menu rows as typed text; the payload proof failed the same way, and the live guard's third scenario failed.
+The footer zone now reads a run under the composer whose first row is a `❯` entry completing the composer's typed slash command as that composer's menu, so the selection stays on the composer, which can only read `pending`; a rule inside the run, a non-completing entry, or a composer holding no slash command leaves the old selection in place.
 Verified live in the lab: with the popup up the state read answers `pending` (previously `empty`) and the payload proof returns `/exit` (previously empty), the submit presses Enter, and the Claude process exits, leaving the shell prompt.
 Growing the window only adds rows above the composer, so the bottom-most-shape selection, the footer zone, and every previously passing verdict are unchanged.
 
@@ -1266,7 +1268,7 @@ ok - live Herdr submit confirm: Claude Code (2.1.283 (Claude Code)) on herdr 0.9
 
 ### Claude background-task exit picker
 
-Measured 2026-10-05 against Claude Code 2.1.289 in an isolated tmux session.
+Measured 2026-10-05 against Claude Code 2.1.289 in an isolated tmux session, and on 2026-10-09 against Claude Code 2.1.294 on Herdr 0.9.3 in an isolated `fm-lab-` session.
 The Herdr lab was not running, so the Herdr path is covered by the existing fakes.
 Typing `/exit` while a background shell is still running opens a picker whose selected row is "Exit and stop tasks" and whose footer is "Enter to confirm · Esc to cancel".
 That screen still classifies as pending, the same verdict as unsubmitted composer text.
@@ -1275,12 +1277,63 @@ The picker is recognised by its recorded structure only: the heading on its own 
 The same strings quoted above a normal composer, as a diff, this note, or a test fixture shows them, are not a picker.
 Submit retries now stop after the Enter that opened the picker and report unknown.
 A typed submit to a pane that already shows the picker types nothing and sends no Enter.
-Exit reports that the worker is blocked on the Claude background-task exit picker and does not type another Enter.
-A submit can return before any read sees the picker, so exit reads the screen once more when its wait for the agent to stop times out, and names the picker there too.
+On 2.1.294 the picker lists the work it stops (`shell · sleep 900`) between its heading and the options, and pressing the digit `1` selects and confirms "Exit and stop tasks" wherever the highlight sits: Claude exits and the listed shell process is gone.
+Exit answers the picker that way, once, after a fresh read still shows it, and reports the listed work; it never sends the confirming Enter.
+"Move to background and exit" is never chosen: it returns the pane to its shell while the session keeps running headless, so the agent would not truthfully be stopped.
+A submit can return before any read sees the picker, so exit keeps reading the screen while it waits for the agent to stop and answers the picker when it appears.
+A picker still showing when the wait after its answer times out refuses as blocked on a prompt.
 Exit does not report a stopped agent whose pane still shows the picker text as blocked on a prompt.
 The watcher does not read the picker: a pane parked on it keeps the ordinary stale triage.
 No recorded screen was available for a model-downgrade confirmation, an MCP approval, or a Claude exit confirmation other than this picker, so those dialogs are not covered.
 Refusing an Enter that would confirm a dialog restores an existing safety path, so it is not gated behind a flag.
+The live guard's background-work scenario starts a real background shell, runs `bin/fm-control.sh exit`, and requires the picker's answer, the stopped agent, and the stopped shell; it fails against the refusing exit.
+
+### Claude named session and detailed-transcript view
+
+Measured 2026-10-09 against Herdr 0.9.3 and Claude Code 2.1.294 in an isolated `fm-lab-` session.
+
+A named session draws its name into the composer's top rule (`──── Firstmate operational input ─`): `claude --name` does, and so does a session Claude continues under an agent name.
+An empty titled composer already read `empty`, but a steering doorbell long enough to wrap onto a second row under that rule read `unknown`, because the titled rule only counted when the glyph row sat directly on the closing rule.
+The Herdr payload proof then could not see the typed doorbell, cleared it, and reported `send-failed`, so fm-send reported that the doorbell did not reach the pane and every watcher re-ring failed the same way.
+A titled rule now opens the composer's rule pair like a plain rule, but closes into a pair only over an agent prompt glyph and at exactly the closing rule's width, so wrapped input, the footer zone, and the slash-command menu read the same under a titled rule as under a plain one.
+
+Pressing ctrl+o on an idle pane replaces the composer with the detailed transcript, whose last row, under a rule, reads `Showing detailed transcript · ctrl+o to toggle · ctrl+e to show all`.
+Every composer read is `unknown` there, so every doorbell and exit refused.
+The steering doorbell, for a composer that reads `unknown`, and `bin/fm-control.sh exit` now press the view's own ctrl+o, never Escape, which interrupts a running turn, and continue only when a fresh read no longer shows the view.
+The shared submit itself does not, because it also types into the captain's own session, where closing a view the captain opened is not the sender's call.
+
+Portable regressions:
+
+```sh
+tests/fm-composer-lib.test.sh
+tests/fm-send-inbox.test.sh
+tests/fm-control.test.sh
+```
+
+```text
+ok - matrix: a draft wrapping under a titled Claude rule reads pending and whole (#16)
+ok - matrix: Claude's slash-command menu under the composer is its menu, not a second composer
+ok - Claude's detailed-transcript view is recognised by its ruled footer and names ctrl+o
+ok - fm-send inbox: a doorbell closes Claude's detailed-transcript view with ctrl+o, then rings
+ok - fm-control exit: a detailed-transcript view is closed with its ctrl+o toggle, never Escape, before /exit
+```
+
+Live guard, which runs these on a second, named Claude session after the plain-session scenarios, ringing the real steering doorbell and requiring the worker to act on it and acknowledge it:
+
+```sh
+FM_HERDR_SUBMIT_CONFIRM_LIVE=1 tests/fm-herdr-submit-confirm-live-e2e.test.sh
+```
+
+```text
+ok - live Herdr submit confirm: Claude Code (2.1.294 (Claude Code)) on herdr 0.9.3 reports empty and renders the requested reply in isolated session fm-lab-herdr-submit-con-803059-9478
+ok - live Herdr submit confirm: Claude Code (2.1.294 (Claude Code)) on herdr 0.9.3 submits a U+2063 away-supervisor payload whose read-back drops the mark
+ok - live Herdr submit confirm: Claude Code (2.1.294 (Claude Code)) on herdr 0.9.3 proves and submits a typed /exit behind its command popup
+ok - live Herdr submit confirm: Claude Code (2.1.294 (Claude Code)) on herdr 0.9.3 takes a steering doorbell that wraps under a titled composer rule
+ok - live Herdr submit confirm: Claude Code (2.1.294 (Claude Code)) on herdr 0.9.3 leaves its detailed-transcript view with ctrl+o and takes the doorbell
+ok - live Herdr submit confirm: fm-control exit answers Claude Code (2.1.294 (Claude Code))'s background-work picker on herdr 0.9.3 and stops the shell
+```
+
+Each of the last three scenarios failed against the code before this change: both doorbells with ring status 2, the "did not reach" result the watcher logs, and exit with the background-work picker open.
 
 ### Prune and respawn
 

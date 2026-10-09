@@ -42,9 +42,11 @@ SEND="$ROOT/bin/fm-send.sh"
 TMP_ROOT=$(fm_test_tmproot fm-send-inbox)
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd)
 
-# Stub tmux: logs literal typed text to FM_SEND_LOG and lets the submit and
-# composer paths reach clean verdicts. FM_FAKE_TMUX_COMPOSER=pending renders a
-# composer visibly holding text; FM_FAKE_TMUX_SEND_FAIL=1 fails send-keys.
+# Stub tmux: logs literal typed text to FM_SEND_LOG, named keys to
+# FM_SEND_LOG.keys, and lets the submit and composer paths reach clean
+# verdicts. FM_FAKE_TMUX_COMPOSER=pending renders a composer visibly holding
+# text; FM_FAKE_TMUX_COMPOSER=transcript renders Claude's detailed-transcript
+# view until its ctrl+o toggle is sent; FM_FAKE_TMUX_SEND_FAIL=1 fails send-keys.
 make_stubs() { # <dir> -> echoes fakebin dir
   local dir=$1 fb="$1/fakebin"
   mkdir -p "$fb"
@@ -65,6 +67,9 @@ case "${1:-}" in
     done
     if [ "$literal" = 1 ]; then
       printf '%s\n' "${1:-}" >> "$FM_SEND_LOG"
+    else
+      printf '%s\n' "${1:-}" >> "$FM_SEND_LOG.keys"
+      [ "${1:-}" != C-o ] || : > "$FM_SEND_LOG.view-closed"
     fi
     exit 0 ;;
   display-message)
@@ -73,6 +78,8 @@ case "${1:-}" in
   capture-pane)
     if [ "${FM_FAKE_TMUX_COMPOSER:-}" = pending ]; then
       printf '╭──────────────╮\n│ leftover txt │\n╰──────────────╯\n'
+    elif [ "${FM_FAKE_TMUX_COMPOSER:-}" = transcript ] && [ ! -e "$FM_SEND_LOG.view-closed" ]; then
+      printf '● ready\n────────────────────────\n  Showing detailed transcript · ctrl+o to toggle · ctrl+e to show all\n'
     else
       printf '╭────╮\n│    │\n╰────╯\n'
     fi
@@ -213,6 +220,26 @@ test_resend_enqueues_new_sequence() {
   *"check the CI result"*) fail "a re-send typed the payload" ;;
   esac
   pass "fm-send inbox: a re-send is a new durable record, never a retyped payload"
+}
+
+# Claude's detailed-transcript view hides the composer (live 2026-10-09,
+# 2.1.294): the doorbell closes it with the view's own ctrl+o toggle and then
+# rings, instead of reporting that it did not reach the pane.
+test_doorbell_closes_a_transcript_view_first() {
+  local dir err rc typed keys
+  dir=$(setup_case transcript-view)
+  err="$dir/send.err"
+  : > "$dir/send.log.keys"
+  run_send "$dir" "$err" FM_FAKE_TMUX_COMPOSER=transcript -- t1 "please rebase onto main"
+  rc=$?
+  expect_code 0 "$rc" "a steer to a pane in its transcript view should exit 0"
+  typed=$(cat "$dir/send.log")
+  assert_contains "$typed" "Firstmate instruction waiting" "the doorbell should be typed once the view is closed"
+  keys=$(cat "$dir/send.log.keys")
+  [ "${keys%%$'\n'*}" = C-o ] || fail "the view's ctrl+o toggle should be the first key, got: $keys"
+  [ "$(grep -c '^C-o$' "$dir/send.log.keys")" -eq 1 ] || fail "the toggle should be pressed once, got: $keys"
+  assert_not_contains "$(cat "$err")" "did not reach" "a closed view must not report an unreached doorbell"
+  pass "fm-send inbox: a doorbell closes Claude's detailed-transcript view with ctrl+o, then rings"
 }
 
 test_pending_composer_skips_ring_advisorily() {
@@ -508,6 +535,7 @@ test_text_steer_rides_inbox
 test_deep_home_doorbell_stays_short
 test_multiline_steer_is_legal
 test_resend_enqueues_new_sequence
+test_doorbell_closes_a_transcript_view_first
 test_pending_composer_skips_ring_advisorily
 test_failed_ring_is_still_sent
 test_fire_and_forget_unlanded_ring_owes_one_retry

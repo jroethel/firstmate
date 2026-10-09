@@ -235,6 +235,21 @@ fm_control_exit_command() {  # <harness>
   esac
 }
 
+# The one key that answers an exit confirmation with exit, keyed by the dialog
+# name bin/fm-composer-lib.sh's fm_composer_blocking_dialog prints; nothing for
+# any other dialog, which the caller refuses.
+# Claude's background-work picker (verified live on 2.1.294): option 1 is "Exit
+# and stop tasks", and its digit selects and confirms it wherever the highlight
+# sits, so the answer is never an Enter. It is the verb's own intent: option 2,
+# "Move to background and exit", keeps the agent running headless after its
+# pane exits, which exit could then not truthfully report as stopped.
+fm_control_exit_dialog_key() {  # <harness> <dialog-name>
+  case "${1-}:${2-}" in
+    'claude:Claude background-task exit picker') printf '1' ;;
+    *) return 1 ;;
+  esac
+}
+
 # The launch argument that makes a RELAUNCH of <harness> RESUME an exact agent
 # session instead of starting a fresh one, printed only when <registered-agent>
 # is the label that session reference belongs to; nothing otherwise.

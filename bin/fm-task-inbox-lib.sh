@@ -343,6 +343,9 @@ fm_task_inbox_doorbell_line() {  # <record-path>
 # failed, 3 skipped because the endpoint is positively dead or missing (nothing
 # typed; recovery owns the record). No return value is delivery proof; the
 # acknowledgement move is the only delivery signal.
+# An `unknown` composer hidden by a view that names its own toggle is shown
+# again with that toggle first (fm_backend_leave_hiding_view); a view that
+# stays is a failed send.
 # The skip is deliberately narrow: only an exact `pending` verdict can defer,
 # because there our Enter could submit someone's real half-typed content.
 # `pending-unproven` and `unknown` still ring - the worst outcome is a garbled
@@ -363,6 +366,11 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
   fi
   cstate=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null) || cstate=unknown
   case "$cstate" in
+    unknown)
+      # A view hiding the composer behind its own toggle (Claude's detailed
+      # transcript) is closed with that toggle so the ring can land.
+      fm_backend_leave_hiding_view "$backend" "$target" "$label" 2>/dev/null || return 2
+      ;;
     pending)
       fm_task_inbox_composer_holds "$backend" "$target" "$line" "$label" \
         && [ "$(fm_backend_busy_state "$backend" "$target" 2>/dev/null)" != busy ] \

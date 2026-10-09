@@ -76,7 +76,10 @@
 #                A separated pair that closes over a bare AGENT-GLYPH row is a
 #                different, self-proving thing: real claude 2.x draws exactly
 #                that (`─` rule, `❯`+NBSP, `─` rule), so the glyph inside the
-#                pair carries the shape and no identity is needed.
+#                pair carries the shape and no identity is needed. A named
+#                claude session burns its name into the top rule
+#                (`──── <name> ─`); that titled rule opens the same pair, but
+#                only one closing over an agent glyph at its exact width.
 #
 # THE COMPOSER FOOTER ZONE (task firstmate-doorbell-vals-pending-p1): a
 # harness draws its own furniture BELOW the composer - a user statusLine, a
@@ -762,16 +765,17 @@ _fm_composer_pi_separator_row() {  # <trimmed-row>
   return 1
 }
 
-# _fm_composer_titled_rule_row: 0 when a trimmed row is a composer rule with a
-# session title burned into it (Claude Code draws a named session's title into
-# its composer's TOP rule: `──────── <name> ─`, issues #5601 and #5558), proven
-# by collapsing to exactly the column width of <plain-rule-spaces>, the partner
-# closing rule already mapped to spaces.
+# _fm_composer_titled_rule_spaces_var: 0 when a trimmed row is a composer rule
+# with a session title burned into it (Claude Code draws a named session's
+# title into its composer's TOP rule: `──────── <name> ─`, issues #5601 and
+# #5558), and sets <out-varname> to the row's canonical column-width spaces so
+# the scan can prove it against the partner closing rule.
 #
 # This is deliberately NOT a relaxation of _fm_composer_pi_separator_row, and
 # the two must not be merged: that predicate also feeds the pi identity
-# conjunction, so it stays strictly dashes-only. This one has the single
-# consumer _fm_composer_bare_rule_sandwich.
+# conjunction, so it stays strictly dashes-only. A titled rule only ever opens
+# a pair that closes over an agent prompt glyph (see the scan), so a blank
+# titled pair never reaches that conjunction.
 #
 # The row must OPEN with the same 8-column dash run the strict separator
 # requires. Width is proven by comparing canonical space strings, never by
@@ -779,18 +783,19 @@ _fm_composer_pi_separator_row() {  # <trimmed-row>
 # (issue #1988). Title text is ASCII-printable only, the same boundary
 # _fm_composer_titled_bottom_ok holds; any other glyph leaves residue, and the
 # verdict stays `unknown`, the safe direction.
-_fm_composer_titled_rule_row() {  # <trimmed-row> <plain-rule-spaces>
-  local row=$1 expected=$2 spaces
-  case "$row" in
+_fm_composer_titled_rule_spaces_var() {  # <out-varname> <trimmed-row>
+  local __fmtr_row=$2 __fmtr_spaces
+  case "$__fmtr_row" in
     ────────*) ;;
     *) return 1 ;;
   esac
-  spaces=${row//─/ }
-  spaces=$(printf '%s' "$spaces" | LC_ALL=C sed 's/[!-~]/ /g')
-  case "$spaces" in
+  [ -n "${__fmtr_row//─/}" ] || return 1
+  __fmtr_spaces=${__fmtr_row//─/ }
+  __fmtr_spaces=$(printf '%s' "$__fmtr_spaces" | LC_ALL=C sed 's/[!-~]/ /g')
+  case "$__fmtr_spaces" in
     *[![:space:]]*) return 1 ;;
   esac
-  [ "$spaces" = "$expected" ]
+  printf -v "$1" '%s' "$__fmtr_spaces"
 }
 
 # Row-scan results are returned through FM_COMPOSER_SCAN_* globals (bash 3.2
@@ -829,7 +834,7 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
   FM_COMPOSER_SCAN_PI_GLYPH=
   FM_COMPOSER_SCAN_LEFTBAR_GLYPH_ROW=-1
   FM_COMPOSER_SCAN_LEFTBAR_GLYPH=
-  local leftbar_start=-1 pi_open=-1 pi_lines=0 pi_max
+  local leftbar_start=-1 pi_open=-1 pi_lines=0 pi_max pi_title_spaces='' title_spaces
   local probe row_glyph row_glyph_row
   local box_glyph_row=-1 box_glyph='' pi_glyph_row=-1 pi_glyph=''
   pi_max=$FM_COMPOSER_PI_MAX_LINES
@@ -875,9 +880,15 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
     # Pi separator rows: a solid `─` rule at least 8 columns wide. A separator
     # closes the preceding candidate and immediately opens the next, so an
     # earlier transcript rule can never outrank the live bottom composer pair.
+    # A titled top rule opens a candidate too, but it closes into a pair only
+    # over an agent prompt glyph and at exactly the closing rule's width; then
+    # it is that composer's pair like any other, wrapped input and the footer
+    # zone included. Otherwise it records nothing, and the closing rule stays
+    # the lower unmatched separator that refuses.
     if _fm_composer_pi_separator_row "$trimmed"; then
       FM_COMPOSER_SCAN_PI_LAST_SEPARATOR=$row
-      if [ "$pi_open" -ge 0 ]; then
+      if [ "$pi_open" -ge 0 ] && { [ -z "$pi_title_spaces" ] \
+         || { [ "$pi_glyph_row" -ge 0 ] && [ "$pi_title_spaces" = "${trimmed//─/ }" ]; }; }; then
         FM_COMPOSER_SCAN_PI_PAIR_FOUND=1
         FM_COMPOSER_SCAN_PI_OPEN=$pi_open
         FM_COMPOSER_SCAN_PI_CLOSE=$row
@@ -890,6 +901,13 @@ _fm_composer_scan_screen() {  # <plain-screen> <cursor-or-empty> [extract-wrap]
         FM_COMPOSER_SCAN_PI_GLYPH=$pi_glyph
       fi
       pi_open=$row
+      pi_title_spaces=''
+      pi_lines=0
+      pi_glyph_row=-1
+      pi_glyph=''
+    elif _fm_composer_titled_rule_spaces_var title_spaces "$trimmed"; then
+      pi_open=$row
+      pi_title_spaces=$title_spaces
       pi_lines=0
       pi_glyph_row=-1
       pi_glyph=''
@@ -1395,6 +1413,19 @@ _fm_composer_row_is_composer_furniture() {  # <trimmed-row> <proof-glyph>
   [ -n "$proof" ] && [ "$glyph" != "$proof" ]
 }
 
+# _fm_composer_slash_token_var: 0 when raw <row> leads with <glyph> followed by
+# a slash command, and sets <out-varname> to that `/command` token.
+_fm_composer_slash_token_var() {  # <out-varname> <raw-row> <glyph>
+  local __fmst_row=$2
+  [ -n "$3" ] || return 1
+  fm_composer_normalize_trim_var __fmst_row
+  case "$__fmst_row" in "$3"*) ;; *) return 1 ;; esac
+  __fmst_row=${__fmst_row#"$3"}
+  fm_composer_normalize_trim_var __fmst_row
+  case "$__fmst_row" in /?*) ;; *) return 1 ;; esac
+  printf -v "$1" '%s' "${__fmst_row%%[[:space:]]*}"
+}
+
 # _fm_composer_locate_footer_zone: THE composer footer zone of <plain> (see THE
 # COMPOSER FOOTER ZONE in this file's header). Records the bottom-most
 # glyph-PROVEN envelope in FM_COMPOSER_FOOTER_AFTER (its closing row, including
@@ -1411,7 +1442,7 @@ _fm_composer_row_is_composer_furniture() {  # <trimmed-row> <proof-glyph>
 # when no envelope is glyph-proven, when a blank row sits directly beneath it,
 # or when the run holds no bare candidate at all (nothing to demote).
 _fm_composer_locate_footer_zone() {  # <plain>
-  local plain=$1 close next trimmed proof=''
+  local plain=$1 close next trimmed proof='' typed entry menu=0
   FM_COMPOSER_FOOTER_AFTER=-1
   FM_COMPOSER_FOOTER_GLYPH=-1
   FM_COMPOSER_FOOTER_LAST=-1
@@ -1447,38 +1478,32 @@ _fm_composer_locate_footer_zone() {  # <plain>
   [ "$FM_COMPOSER_SCAN_BARE_ROW" -gt "$FM_COMPOSER_FOOTER_AFTER" ] || return 1
   FM_COMPOSER_FOOTER_LAST=$FM_COMPOSER_FOOTER_AFTER
   next=$((FM_COMPOSER_FOOTER_AFTER + 1))
+  # Claude Code's slash-command menu (verified on 2.1.294): typing `/exit`
+  # draws completion rows directly under the composer, and the selected one
+  # leads with the composer's own `❯`. That row completes the command the
+  # envelope holds, so it is the envelope's menu, not a live composer, and so
+  # is the rest of the run, descriptions and their wrapped tails included. The
+  # selection then stays on a glyph row holding typed text, which can only read
+  # `pending`, never `empty`; a rule anywhere in the run still refuses.
+  if _fm_composer_slash_token_var typed \
+       "$(_fm_composer_screen_row "$FM_COMPOSER_FOOTER_GLYPH" "$plain")" "$proof" \
+     && _fm_composer_slash_token_var entry "$(_fm_composer_screen_row "$next" "$plain")" "$proof"; then
+    case "$entry" in "$typed"*) menu=1 ;; esac
+  fi
   while :; do
     trimmed=$(_fm_composer_screen_row "$next" "$plain")
     fm_composer_normalize_trim_var trimmed
     [ -n "$trimmed" ] || break
-    _fm_composer_row_is_composer_furniture "$trimmed" "$proof" || return 1
+    if [ "$menu" = 1 ]; then
+      ! fm_composer_row_has_edge "$trimmed" || return 1
+    else
+      _fm_composer_row_is_composer_furniture "$trimmed" "$proof" || return 1
+    fi
     FM_COMPOSER_FOOTER_LAST=$next
     next=$((next + 1))
   done
   [ "$FM_COMPOSER_SCAN_BARE_ROW" -gt "$FM_COMPOSER_FOOTER_AFTER" ] \
     && [ "$FM_COMPOSER_SCAN_BARE_ROW" -le "$FM_COMPOSER_FOOTER_LAST" ]
-}
-
-# _fm_composer_bare_rule_sandwich: 0 when bare agent-glyph <row> sits in its
-# own titled composer: a titled rule directly above it and the screen's only
-# unmatched separator directly below it, which is that composer's closing rule.
-#
-# The cursorless staleness rule reads an unmatched separator BELOW a candidate
-# as proof the candidate is scrollback. A titled top rule never opens the
-# separator pair, so the composer's own closing rule becomes that unmatched
-# separator and a genuinely idle composer read `unknown`. Adjacency on BOTH
-# edges keeps the staleness rule intact everywhere else: a glyph stranded in
-# scrollback has transcript rows, not its own rules, around it.
-_fm_composer_bare_rule_sandwich() {  # <plain-screen> <row>
-  local plain=$1 row=$2 above below
-  [ "$row" -ge 1 ] || return 1
-  [ "$FM_COMPOSER_SCAN_PI_LAST_SEPARATOR" -eq "$((row + 1))" ] || return 1
-  below=$(_fm_composer_screen_row "$((row + 1))" "$plain")
-  fm_composer_normalize_trim_var below
-  _fm_composer_pi_separator_row "$below" || return 1
-  above=$(_fm_composer_screen_row "$((row - 1))" "$plain")
-  fm_composer_normalize_trim_var above
-  _fm_composer_titled_rule_row "$above" "${below//─/ }"
 }
 
 _fm_composer_select_cursorless() {
@@ -1536,14 +1561,8 @@ _fm_composer_select_cursorless() {
   fi
   if [ "$FM_COMPOSER_SCAN_PI_PAIR_FOUND" = 0 ] \
      && [ "$FM_COMPOSER_SCAN_PI_LAST_SEPARATOR" -gt "$generic" ]; then
-    # Spare only a bare glyph inside its own titled composer rules; see
-    # _fm_composer_bare_rule_sandwich for why that shape is not scrollback.
-    if ! { [ "$FM_COMPOSER_SELECTED_KIND" = bare ] \
-           && [ "$generic" = "$FM_COMPOSER_SCAN_BARE_ROW" ] \
-           && _fm_composer_bare_rule_sandwich "$plain" "$FM_COMPOSER_SCAN_BARE_ROW"; }; then
-      FM_COMPOSER_SELECTED_KIND=
-      return 1
-    fi
+    FM_COMPOSER_SELECTED_KIND=
+    return 1
   fi
   if [ "$FM_COMPOSER_SCAN_SHELL_ROW" -gt "$generic" ]; then
     FM_COMPOSER_SELECTED_KIND=
@@ -1694,6 +1713,38 @@ fm_composer_blocking_dialog() {  # <screen> -> dialog name
     return 0
   fi
   return 1
+}
+
+# fm_composer_hiding_view: name a recorded view that replaces the composer and
+# names its own toggle, printed as `<name><TAB><key>`; returns 1 and prints
+# nothing otherwise. The toggle only switches the view, so pressing it answers
+# nothing; Escape would also leave this view, but it interrupts a running turn.
+# Recorded 2026-10-09 on Claude Code 2.1.294: ctrl+o on an idle pane swaps the
+# composer for the detailed transcript, whose last row, under a rule, reads
+# `Showing detailed transcript · ctrl+o to toggle · ctrl+e to show all`.
+fm_composer_hiding_view() {  # <screen> -> "<name>\t<key>"
+  if printf '%s\n' "${1-}" | fm_composer_strip_ansi | LC_ALL=C awk '
+    /[^ \t\r]/ { above = last; last = $0 }
+    END {
+      exit !(last ~ /^[ \t]*Showing detailed transcript · ctrl\+o to toggle( · |[ \t\r]*$)/ \
+             && above ~ /^[ \t]*(─)+[ \t\r]*$/)
+    }
+  '; then
+    printf '%s\t%s' 'Claude detailed-transcript view' C-o
+    return 0
+  fi
+  return 1
+}
+
+# fm_composer_blocking_dialog_stops: the work that picker lists as stopping on
+# exit (`shell · sleep 900`), one item per line, so a caller that answers it
+# can report what the answer stopped. Prints nothing for any other screen.
+fm_composer_blocking_dialog_stops() {  # <screen>
+  printf '%s\n' "${1-}" | fm_composer_strip_ansi | LC_ALL=C awk '
+    /^[ \t]*The following will stop when you exit:[ \t\r]*$/ { listing = 1; next }
+    /^[ \t]*(❯ )?[0-9]+\. / || /^[ \t]*Enter to confirm/ { listing = 0 }
+    listing && /[^ \t\r]/ { sub(/^[ \t]+/, ""); sub(/[ \t\r]+$/, ""); print }
+  '
 }
 
 # A command substitution drops a shell variable, and every composer read runs
