@@ -897,6 +897,14 @@ if ! kill -0 "$WATCH_PID" 2>/dev/null; then
   [ -e "$RESTART_HOME/state/.last-watcher-beat" ] \
     || fail "the recovery replacement watcher did not begin polling"
 fi
+# Stop the watcher before the lock dies. Its detached refresh polls every
+# second with a 2-second deadline and would otherwise race the writer below
+# for the reclaimed lock: the idle-only writer yields to a refresh already in
+# flight, and under load that refresh is killed by its own deadline before it
+# can publish, so the ledger would never appear. The writer alone must recover.
+kill "$WATCH_PID" >/dev/null 2>&1 || true
+wait "$WATCH_PID" >/dev/null 2>&1 || true
+WATCH_PID=
 kill -KILL "$LOCK_HOLDER_PID" >/dev/null 2>&1 || true
 wait "$LOCK_HOLDER_PID" >/dev/null 2>&1 || true
 LOCK_HOLDER_PID=
@@ -910,9 +918,6 @@ while [ ! -e "$RESTART_HOME/state/home-summary.json" ] && [ "$i" -lt 200 ]; do
 done
 [ -e "$RESTART_HOME/state/home-summary.json" ] \
   || fail "a dead publication lock wedged publication"
-kill "$WATCH_PID" >/dev/null 2>&1 || true
-wait "$WATCH_PID" >/dev/null 2>&1 || true
-WATCH_PID=
 pass "publication remains single-flight across watcher restart"
 
 # A publication that keeps failing is deliberately non-fatal to its caller, so
@@ -1003,16 +1008,17 @@ cat > "$ORDER_HOME/data/backlog.md" <<'EOF'
 ## Done
 EOF
 REAL_DATE=$(command -v date)
+# The attempt stamp is the first timestamp the refresh takes; every later one
+# reads as the late time. The first caller is picked by an atomic mkdir rather
+# than by elapsed time, so scheduling delay cannot turn it into a late stamp.
 cat > "$ORDER_DATE_BIN/date" <<'SH'
 #!/usr/bin/env bash
 if [ "$#" -eq 2 ] && [ "$1" = -u ] && [ "$2" = +%Y-%m-%dT%H:%M:%SZ ]; then
-  python3 - "$FM_TEST_ORDER_START" "$FM_TEST_ORDER_EARLY" "$FM_TEST_ORDER_LATE" <<'PY'
-import sys
-import time
-
-started = float(sys.argv[1])
-print(sys.argv[2] if time.time() - started < 1 else sys.argv[3])
-PY
+  if mkdir "$FM_TEST_ORDER_FIRST" 2>/dev/null; then
+    echo "$FM_TEST_ORDER_EARLY"
+  else
+    echo "$FM_TEST_ORDER_LATE"
+  fi
   exit 0
 fi
 exec "$FM_TEST_REAL_DATE" "$@"
@@ -1033,9 +1039,8 @@ while [ ! -e "$ORDER_LOCK_MARKER" ] && [ "$i" -lt 100 ]; do
   i=$((i + 1))
 done
 [ -e "$ORDER_LOCK_MARKER" ] || fail "could not hold the publication lock for ordering coverage"
-order_started=$(python3 -c 'import time; print(time.time())')
 PATH="$ORDER_DATE_BIN:$FAKEBIN:$PATH" FM_TEST_REAL_DATE="$REAL_DATE" \
-  FM_TEST_ORDER_START="$order_started" FM_TEST_ORDER_EARLY="$NOW_ONE" \
+  FM_TEST_ORDER_FIRST="$TMP_ROOT/order-first-date" FM_TEST_ORDER_EARLY="$NOW_ONE" \
   FM_TEST_ORDER_LATE="$NOW_THREE" FM_ROOT_OVERRIDE="$ROOT" \
   FM_HOME="$ORDER_HOME" FM_HOME_SUMMARY_TIMEOUT=2 \
   "$WRITER" --best-effort \
