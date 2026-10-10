@@ -969,7 +969,22 @@ fm_remote_job_worker_identity_path() { printf '%s\n' "$FM_REMOTE_JOB_STATE/worke
 fm_remote_job_worker_lock_path() { printf '%s\n' "$FM_REMOTE_JOB_STATE/worker.lock"; }
 
 fm_remote_job_process_start() {
-  local pid=$1 ps_bin value
+  local pid=$1 ps_bin value stat_line
+  local -a stat_fields
+  # Prefer /proc stat field 22 (clock ticks since boot): it never changes for a
+  # live process, while the ps lstart fallback re-renders a different date
+  # whenever the wall clock steps (observed as WSL2 btime drift). A recorded
+  # lstart that stops matching its own live owner makes the worker lock look
+  # dead, so a second worker steals it and reclaims the first one's running job.
+  if [ -r "/proc/$pid/stat" ]; then
+    stat_line=$(cat "/proc/$pid/stat" 2>/dev/null) || return 1
+    # After the final comm delimiter, array index 19 is proc stat field 22.
+    read -r -a stat_fields <<< "${stat_line##*)}"
+    [ "${#stat_fields[@]}" -ge 20 ] || return 1
+    case "${stat_fields[19]}" in ''|*[!0-9]*) return 1 ;; esac
+    printf 'proc-starttime=%s\n' "${stat_fields[19]}"
+    return 0
+  fi
   if [ -x /bin/ps ]; then ps_bin=/bin/ps; elif [ -x /usr/bin/ps ]; then ps_bin=/usr/bin/ps; else return 1; fi
   value=$("$ps_bin" -p "$pid" -o lstart= 2>/dev/null) || return 1
   [ -n "$value" ] || return 1

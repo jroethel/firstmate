@@ -429,4 +429,31 @@ assert_present "$LIVE_STAGE" "the worker reaped staging owned by a live process"
 rm -rf -- "$LIVE_STAGE"
 pass "abandoned stage litter is reaped by age while live staging survives"
 
+# A live process keeps one start identity for its whole life, whatever the wall
+# clock does: ps lstart is re-rendered when the clock steps (observed as WSL2
+# btime drift), which made a live worker's recorded lock identity stop matching
+# and let a second worker steal the lock and reclaim the first one's job. Where
+# /proc exists the identity must come from the kernel's ticks-since-boot, which
+# no clock step can move.
+sleep 30 &
+IDENT_PID=$!
+ident_a=$(fm_remote_job_process_start "$IDENT_PID") || fail "a live process had no start identity"
+ident_b=$(fm_remote_job_process_start "$IDENT_PID") || fail "a live process lost its start identity"
+[ "$ident_a" = "$ident_b" ] || fail "a live process's start identity changed between reads"
+ident_other=$(fm_remote_job_process_start "$$") || fail "this process had no start identity"
+[ "$ident_a" != "$ident_other" ] || fail "two different processes shared one start identity"
+if [ -r "/proc/$IDENT_PID/stat" ]; then
+  ident_ticks=$(awk '{sub(/^.*\) /, ""); print $20}' "/proc/$IDENT_PID/stat")
+  case "$ident_a" in
+    *"$ident_ticks"*) ;;
+    *) fail "the start identity ignored the kernel start time: $ident_a vs $ident_ticks" ;;
+  esac
+fi
+kill "$IDENT_PID" 2>/dev/null || true
+wait "$IDENT_PID" 2>/dev/null || true
+if fm_remote_job_process_start "$IDENT_PID" >/dev/null 2>&1; then
+  fail "a dead process still had a start identity"
+fi
+pass "a live process keeps one start identity independent of the wall clock"
+
 echo "ALL TESTS PASSED"
