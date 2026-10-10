@@ -1746,7 +1746,8 @@ fm_failure_episode_reset() {
 #     instead of deferring to it. A legacy entry that records no session lock
 #     keeps the verdict above.
 #   - Every firing DEFERS (exits 0) to an open claim; anything else - a
-#     terminal outcome, a dead or identity-mismatched owner, a stuck owner, an
+#     terminal outcome, a dead or identity-mismatched owner, a claim from
+#     another session lock, a stuck owner, an
 #     identityless entry, or no claim at all - lets the next firing take
 #     generation N+1 (fm_autoarm_claim_next). Taking a newer generation IS the
 #     reclaim: a steady-state predecessor is never signalled or revoked.
