@@ -592,6 +592,31 @@ tests/fm-claude-stop-autoarm.test.sh
 tests/fm-turnend-guard.test.sh
 ```
 
+### A Stop hook tree outlives its Claude session, 2026-10-10
+
+This supports the `fm_autoarm_claim_open` rule in `bin/fm-wake-lib.sh` that a claim taken under another session lock is never open.
+It was measured with Claude Code 2.1.294 on Linux (WSL2) in `bin/fm-live-lab.sh` labs with the supervision host on.
+
+| How the session that armed the cycle ended | Its Stop hook, host, arm, and watcher |
+| --- | --- |
+| `/exit` in a foreground primary | stopped; the hook recorded `outcome=failed` |
+| `claude stop <id>` on a background session | stopped |
+| `SIGKILL` of the session's Claude process | kept running, with the claim still `arming` |
+
+Claude's daemon log on the same machine showed the same leftover tree after `bg retire <id>: idle-prompt, idle 4h, worker 2.1.292 (daemon 2.1.294)`, the idle retire of a background session.
+
+The opt-in live guard kills the lab primary, starts a fresh one in its place, and requires the fresh session's first turn end to arm its own host and stop the leftover one, and a finishing worker to wake it:
+
+```sh
+FM_CLAUDE_ORPHAN_CLAIM_LIVE_E2E=1 tests/fm-claude-stop-autoarm-orphan-live-e2e.test.sh
+```
+
+Observed output:
+
+```text
+ok - orphaned auto-arm claim live (2.1.294 (Claude Code)): a session started after its predecessor's process died arms its own host and is woken by a finishing worker
+```
+
 ## Supervision host
 
 This pre-flip evidence supports [supervision-host.md](../supervision-host.md)'s Claude engine, away-wake path, and failure direction; its no-file baseline describes the earlier opt-in release, not the current Claude default.
