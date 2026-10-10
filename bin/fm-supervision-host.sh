@@ -345,7 +345,8 @@ release_branch_leases() {
 
 # Stop whatever a predecessor host left running, then take the record. The
 # auto-arm admits one generation at a time, so a predecessor still alive here
-# was superseded (its owner died or went stale) or crashed mid-cleanup.
+# was superseded (its owner died or went stale, or its session no longer holds
+# the lock) or crashed mid-cleanup.
 activate() {
   local role pid identity
   mkdir -p "$STATE" || return 1
