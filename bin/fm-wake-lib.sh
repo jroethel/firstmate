@@ -1718,7 +1718,10 @@ fm_failure_episode_reset() {
 # generation. This is an optimistic, generation-based single-flight design:
 #
 #   - The CURRENT claim is the ledger's latest entry: line 1 begins with the
-#     "epoch=N owner_pid=P outcome=O updated_at=T" record. A "rewake" outcome
+#     "epoch=N owner_pid=P outcome=O updated_at=T" record. An "arming" claim
+#     also records "session_pid=S session_id=I", the session lock (state/.lock
+#     line 1 and its state/.lock-session sidecar, I omitted when there is none)
+#     it was taken under. A "rewake" outcome
 #     also records "session_pid=S recovery_generation=G", binding that
 #     handling turn to its live session-lock owner and watcher recovery episode.
 #     Line 2 is the claiming process's pid-identity, the same identity every other
@@ -1729,11 +1732,19 @@ fm_failure_episode_reset() {
 #     reused pid can never authenticate someone else's stale entry.
 #   - A claim is OPEN (fm_autoarm_claim_open) while its outcome is "arming",
 #     its owner pid is alive, its recorded identity successfully recomputes
-#     and matches that pid, and it is not STUCK - stuck meaning both the
+#     and matches that pid, the session lock it recorded is still the current
+#     one, and it is not STUCK - stuck meaning both the
 #     ledger entry and the watcher beacon (state/.last-watcher-beat) are older
 #     than the guard grace, which proves the owner hung mid-arm with nothing
 #     supervising (every legitimate arming phase with no watcher is bounded in
 #     seconds, while a healthy hours-long cycle keeps the beacon beating).
+#     A claim taken under another session lock is never open: its hook tree
+#     can outlive the session that armed it (observed 2026-10-08: Claude's
+#     daemon retired an idle background session and left its Stop hook, host,
+#     and watcher running), and a close it hands back can only rewake that
+#     gone session, so the lock's new session takes the next generation
+#     instead of deferring to it. A legacy entry that records no session lock
+#     keeps the verdict above.
 #   - Every firing DEFERS (exits 0) to an open claim; anything else - a
 #     terminal outcome, a dead or identity-mismatched owner, a stuck owner, an
 #     identityless entry, or no claim at all - lets the next firing take
@@ -1802,8 +1813,8 @@ _fm_autoarm_epoch_field() {  # <epoch-file> <field>
 }
 
 # Parse the current ledger claim. Sets FM_AUTOARM_GEN, FM_AUTOARM_OWNER,
-# FM_AUTOARM_OUTCOME, FM_AUTOARM_SESSION, FM_AUTOARM_RECOVERY, and
-# FM_AUTOARM_IDENTITY (line 2 of the entry, and ONLY
+# FM_AUTOARM_OUTCOME, FM_AUTOARM_SESSION, FM_AUTOARM_SESSION_ID,
+# FM_AUTOARM_RECOVERY, and FM_AUTOARM_IDENTITY (line 2 of the entry, and ONLY
 # line 2 - identity is never substituted from a lock, so a transient
 # micro-mutex hold or a reused pid can never authenticate a stale entry).
 fm_autoarm_ledger_read() {  # <state-dir>
@@ -1813,12 +1824,14 @@ fm_autoarm_ledger_read() {  # <state-dir>
   FM_AUTOARM_OWNER=
   FM_AUTOARM_OUTCOME=
   FM_AUTOARM_SESSION=
+  FM_AUTOARM_SESSION_ID=
   FM_AUTOARM_RECOVERY=
   FM_AUTOARM_IDENTITY=
   FM_AUTOARM_GEN=$(_fm_autoarm_epoch_field "$epoch" epoch) || return 1
   FM_AUTOARM_OWNER=$(_fm_autoarm_epoch_field "$epoch" owner_pid) || return 1
   FM_AUTOARM_OUTCOME=$(_fm_autoarm_epoch_field "$epoch" outcome) || return 1
   FM_AUTOARM_SESSION=$(_fm_autoarm_epoch_field "$epoch" session_pid 2>/dev/null || true)
+  FM_AUTOARM_SESSION_ID=$(_fm_autoarm_epoch_field "$epoch" session_id 2>/dev/null || true)
   FM_AUTOARM_RECOVERY=$(_fm_autoarm_epoch_field "$epoch" recovery_generation 2>/dev/null || true)
   case "$FM_AUTOARM_GEN" in
     ''|*[!0-9]*) return 1 ;;
@@ -1827,9 +1840,32 @@ fm_autoarm_ledger_read() {  # <state-dir>
   return 0
 }
 
+# Read the session lock in state dir $1 as an arming claim records it: sets
+# FM_AUTOARM_LOCK_PID (state/.lock line 1, which must be numeric) and
+# FM_AUTOARM_LOCK_ID (the state/.lock-session sidecar's first line, empty when
+# the sidecar is missing, symlinked, or not a plain session id, so it can never
+# break the space-separated ledger record). Returns 1 without a numeric pid.
+_fm_autoarm_session_lock() {  # <state-dir>
+  local state=$1 id=
+  FM_AUTOARM_LOCK_PID=$(sed -n '1p' "$state/.lock" 2>/dev/null || true)
+  FM_AUTOARM_LOCK_ID=
+  case "$FM_AUTOARM_LOCK_PID" in
+    ''|*[!0-9]*) FM_AUTOARM_LOCK_PID=; return 1 ;;
+  esac
+  if [ -f "$state/.lock-session" ] && [ ! -L "$state/.lock-session" ]; then
+    id=$(sed -n '1p' "$state/.lock-session" 2>/dev/null || true)
+    case "$id" in
+      ''|*[!A-Za-z0-9-]*) ;;
+      *) FM_AUTOARM_LOCK_ID=$id ;;
+    esac
+  fi
+  return 0
+}
+
 # True while the CURRENT ledger claim is open and healthy - the defer predicate
 # both Stop participants use. Open means: outcome "arming", a live owner whose
-# mandatory recorded identity recomputes and matches its pid, and not stuck
+# mandatory recorded identity recomputes and matches its pid, a recorded
+# session lock that is still the current one, and not stuck
 # (the contract comment above owns the stuck proof). fm_path_age reports an
 # absent beacon as ancient, which is exactly right: arming for a full grace
 # window without producing a first beat is the same hang. An identityless
@@ -1849,6 +1885,11 @@ fm_autoarm_claim_open() {  # <state-dir> [grace]
   current=$(fm_pid_identity "$FM_AUTOARM_OWNER" 2>/dev/null) || return 1
   [ -n "$current" ] || return 1
   [ "$current" = "$FM_AUTOARM_IDENTITY" ] || return 1
+  if [ -n "$FM_AUTOARM_SESSION" ]; then
+    _fm_autoarm_session_lock "$state" || return 1
+    [ "$FM_AUTOARM_SESSION" = "$FM_AUTOARM_LOCK_PID" ] || return 1
+    [ "$FM_AUTOARM_SESSION_ID" = "$FM_AUTOARM_LOCK_ID" ] || return 1
+  fi
   if [ "$(fm_path_age "$epoch")" -ge "$grace" ] \
     && [ "$(fm_path_age "$state/.last-watcher-beat")" -ge "$grace" ]; then
     return 1
@@ -1891,12 +1932,13 @@ fm_autoarm_midturn_healthy() {  # <state-dir> [grace]
 }
 
 # Atomically publish this process as the owner of generation N+1, under one
-# short micro-mutex hold. Returns 0 with FM_AUTOARM_MY_GEN set on success, 2
-# when a competing claimant won the race (the ledger holds an open claim), and
-# 1 when the micro-mutex is contended, the mandatory identity cannot be
-# computed, or the write failed.
+# short micro-mutex hold, bound to the session lock the caller holds. Returns 0
+# with FM_AUTOARM_MY_GEN set on success, 2 when a competing claimant won the
+# race (the ledger holds an open claim), and 1 when the micro-mutex is
+# contended, the mandatory identity or session lock cannot be read, or the
+# write failed.
 fm_autoarm_claim_next() {  # <state-dir> [grace]
-  local state=$1 grace=${2:-${FM_GUARD_GRACE:-300}} lock epoch pid gen identity tmp
+  local state=$1 grace=${2:-${FM_GUARD_GRACE:-300}} lock epoch pid gen identity tmp session
   lock="$state/.claude-autoarm.lock"
   epoch="$state/.claude-autoarm-epoch"
   FM_AUTOARM_MY_GEN=
@@ -1906,6 +1948,8 @@ fm_autoarm_claim_next() {  # <state-dir> [grace]
   pid=${BASHPID:-$$}
   identity=$(fm_pid_identity "$pid" 2>/dev/null) || return 1
   [ -n "$identity" ] || return 1
+  _fm_autoarm_session_lock "$state" || return 1
+  session="session_pid=$FM_AUTOARM_LOCK_PID${FM_AUTOARM_LOCK_ID:+ session_id=$FM_AUTOARM_LOCK_ID}"
   fm_lock_try_acquire "$lock" || return 1
   if fm_autoarm_claim_open "$state" "$grace"; then
     fm_lock_release "$lock"
@@ -1917,8 +1961,8 @@ fm_autoarm_claim_next() {  # <state-dir> [grace]
   esac
   gen=$((gen + 1))
   tmp="$epoch.tmp.$pid"
-  if ! printf 'epoch=%s owner_pid=%s outcome=arming updated_at=%s\n%s\n' \
-      "$gen" "$pid" "$(date +%s)" "$identity" > "$tmp" 2>/dev/null \
+  if ! printf 'epoch=%s owner_pid=%s outcome=arming updated_at=%s %s\n%s\n' \
+      "$gen" "$pid" "$(date +%s)" "$session" "$identity" > "$tmp" 2>/dev/null \
     || ! mv -f "$tmp" "$epoch" 2>/dev/null; then
     rm -f "$tmp" 2>/dev/null || true
     fm_lock_release "$lock"

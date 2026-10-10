@@ -325,7 +325,7 @@ The claim is the ledger entry itself.
 The ledger is `state/.claude-autoarm-epoch`:
 
 - Its epoch sequence is a monotonic claim generation.
-- Line 1 records the claim and terminal outcome.
+- Line 1 records the claim and terminal outcome, and an `arming` claim also records the session lock it was taken under.
 - Line 2 records the claiming process's mandatory pid-identity.
 
 `fm_autoarm_claim_open` and `fm_autoarm_claim_next` in `bin/fm-wake-lib.sh` own the format contract.
@@ -335,13 +335,17 @@ A claim is open while all of these hold:
 - Its outcome is `arming`.
 - Its owner pid is alive.
 - Its recorded identity successfully recomputes and matches that pid.
+- The session lock it recorded is still the current one.
 - It is not stuck.
 
 Stuck means the entry and the watcher beacon are both older than the guard grace, which proves the owner hung mid-arm.
 A healthy hours-long foregrounded cycle keeps the beacon beating, and every arming phase with no watcher is bounded in seconds.
 
+A claim's hook process tree can outlive the session that armed it, for example when Claude's daemon retires an idle background session.
+Its close could only rewake that gone session, so a claim taken under another session lock never defers the lock's current session.
+
 Anything else lets the next Stop-owned firing take the next generation and arm.
-That covers a finished outcome, a dead or identity-mismatched owner, a stuck owner, an identityless entry, or no entry.
+That covers a finished outcome, a dead or identity-mismatched owner, a claim from another session lock, a stuck owner, an identityless entry, or no entry.
 Taking a newer generation is the reclaim, and a steady-state predecessor is never signalled or revoked.
 
 No mutex is held across arming or output.

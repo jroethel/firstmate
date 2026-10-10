@@ -246,6 +246,53 @@ run_autoarm_bg() {
   RUN_AUTOARM_BG_PID=$!
 }
 
+# One session holding the lock for a whole case, the shape of Claude's
+# undeduplicated concurrent Stop firings: start_lock_session leaves a live fake
+# harness recorded on state/.lock with a session id beside it, and each
+# run_autoarm_in_session firing is a hook under its own fake harness that owns
+# that lock through the trusted same-session id. The trailing exit keeps bash
+# from exec'ing the hook in place of the fake harness, which must stay in the
+# hook's ancestry as its CLAUDE_PID. stop_lock_session ends the session.
+SAME_SESSION_ID=sess-autoarm-fixture
+start_lock_session() {
+  local dir=$1 i=0
+  printf '%s\n' "$SAME_SESSION_ID" > "$dir/state/.lock-session"
+  rm -f "$dir/state/.lock" "$dir/state/session-end"
+  FM_HOME="$dir" "$FAKE_CLAUDE" -c '
+    printf "%s\n" "$$" > "$FM_HOME/state/.lock"
+    while [ ! -e "$FM_HOME/state/session-end" ]; do sleep 0.05; done; exit 0
+  ' &
+  LOCK_SESSION_PID=$!
+  while [ ! -s "$dir/state/.lock" ]; do
+    [ "$i" -lt 100 ] || fail "the fixture session never recorded its lock"
+    sleep 0.02
+    i=$((i + 1))
+  done
+}
+stop_lock_session() {
+  : > "$1/state/session-end"
+  wait "$LOCK_SESSION_PID" 2>/dev/null || true
+}
+run_autoarm_in_session() {
+  local dir=$1 rc=0
+  printf '%s\n' '{"session_id":"sess-autoarm","stop_hook_active":false}' \
+    | FM_HOME="$dir" CLAUDE_CODE_SESSION_ID="$SAME_SESSION_ID" "$FAKE_CLAUDE" -c '
+        CLAUDE_PID=$$ "$FM_HOME/bin/fm-claude-stop-autoarm.sh"; exit $?
+      ' 2>&1 || rc=$?
+  printf 'RC=%s\n' "$rc" >&2
+  return "$rc"
+}
+# The same firing in the background, output captured to a file. Sets
+# RUN_AUTOARM_BG_PID, whose exit status is the hook's.
+run_autoarm_in_session_bg() {
+  local dir=$1 out=$2
+  printf '%s\n' '{"session_id":"sess-autoarm","stop_hook_active":false}' \
+    | FM_HOME="$dir" CLAUDE_CODE_SESSION_ID="$SAME_SESSION_ID" "$FAKE_CLAUDE" -c '
+        CLAUDE_PID=$$ "$FM_HOME/bin/fm-claude-stop-autoarm.sh"; exit $?
+      ' > "$out" 2>&1 &
+  RUN_AUTOARM_BG_PID=$!
+}
+
 watcher_identity() {
   local dir=$1 pid=$2
   FM_STATE_OVERRIDE="$dir/state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$dir/bin/fm-wake-lib.sh" "$pid"
@@ -1307,8 +1354,10 @@ test_superseded_owner_goes_silent_and_never_double_translates() {
   dir=$(make_primary_dir "$TMP_ROOT/v2-superseded-silence")
   : > "$dir/state/task1.meta"
   write_arm_fixture "$dir" blocking-actionable
+  # A, B, and C are Stop firings of the one session holding the lock.
+  start_lock_session "$dir"
   a_out="$dir/state/a.out"
-  run_autoarm_bg "$dir" "$a_out"
+  run_autoarm_in_session_bg "$dir" "$a_out"
   a_pid=$RUN_AUTOARM_BG_PID
   i=0
   while [ "$(epoch_outcome "$dir")" != arming ] || [ ! -e "$dir/state/arm-ran" ]; do
@@ -1316,7 +1365,7 @@ test_superseded_owner_goes_silent_and_never_double_translates() {
     sleep 0.1
     i=$((i + 1))
   done
-  b_out=$(run_autoarm "$dir" 2>/dev/null); b_status=$?
+  b_out=$(run_autoarm_in_session "$dir" 2>/dev/null); b_status=$?
   expect_code 0 "$b_status" "a firing during a live open claim must defer promptly (no mutex is held across arming)"
   [ -z "$b_out" ] || fail "deferring firing produced output: $b_out"
   count=$(wc -l < "$dir/state/arm-ran" | tr -d ' ')
@@ -1325,7 +1374,7 @@ test_superseded_owner_goes_silent_and_never_double_translates() {
   kill -0 "$a_pid" 2>/dev/null || fail "owner A finished before the supersession could be exercised"
   touch -t 202001010000 "$dir/state/.claude-autoarm-epoch"
   touch -t 202001010000 "$dir/state/.last-watcher-beat"
-  c_out=$(run_autoarm "$dir" 2>/dev/null); c_status=$?
+  c_out=$(run_autoarm_in_session "$dir" 2>/dev/null); c_status=$?
   expect_code 2 "$c_status" "the superseding generation must translate its own close"
   assert_contains "$c_out" "firstmate watcher wake" "the superseding generation must carry the rewake banner"
   wait "$a_pid"
@@ -1336,7 +1385,60 @@ test_superseded_owner_goes_silent_and_never_double_translates() {
   [ "$(epoch_outcome "$dir")" = rewake ] || fail "the superseding generation's outcome was overwritten: $(epoch_outcome "$dir")"
   count=$(wc -l < "$dir/state/arm-ran" | tr -d ' ')
   [ "$count" -eq 2 ] || fail "expected exactly the owner and superseder arms, saw $count"
+  stop_lock_session "$dir"
   pass "auto-arm: a superseded owner goes silent - one supersession episode, one translation, no held mutex"
+}
+
+# The 2026-10-08 missed wake: session A's process ended while its Stop hook
+# kept its cycle armed (Claude's daemon retired the idle background session),
+# and session B took the lock. That claim is live, identity-matched, and not
+# stuck, but a close it translates can only rewake the gone session A, so B's
+# Stop must take the next generation and arm its own cycle rather than defer,
+# and A's orphaned hook goes silent when its cycle closes.
+test_claim_left_by_a_gone_session_never_defers_the_new_session() {
+  local dir a_out a_harness a_hook b_out b_status i count
+  dir=$(make_primary_dir "$TMP_ROOT/v2-gone-session-claim")
+  : > "$dir/state/task1.meta"
+  write_arm_fixture "$dir" blocking-actionable
+  a_out="$dir/state/a.out"
+  # Session A's fake harness holds the lock and runs the hook as its child (the
+  # trailing exit keeps bash from exec'ing the hook in its place).
+  printf '%s\n' '{"session_id":"sess-a","stop_hook_active":false}' \
+    | FM_HOME="$dir" "$FAKE_CLAUDE" -c '
+        printf "%s\n" "$$" > "$FM_HOME/state/.lock"
+        "$FM_HOME/bin/fm-claude-stop-autoarm.sh"; exit $?
+      ' > "$a_out" 2>&1 &
+  a_harness=$!
+  i=0
+  while [ "$(epoch_outcome "$dir")" != arming ] || [ ! -e "$dir/state/arm-ran" ]; do
+    [ "$i" -lt 50 ] || fail "session A's hook never published its arming claim"
+    sleep 0.1
+    i=$((i + 1))
+  done
+  a_hook=$(epoch_field "$dir" owner_pid)
+  [ "$a_hook" != "$a_harness" ] || fail "session A's hook replaced its harness, so the case cannot separate them"
+  # Session A's process goes away; its hook, mid-arm, does not.
+  kill -KILL "$a_harness" 2>/dev/null || fail "could not end session A's harness"
+  wait "$a_harness" 2>/dev/null || true
+  kill -0 "$a_hook" 2>/dev/null || fail "session A's hook did not outlive its session, so the case was not exercised"
+  [ "$(epoch_outcome "$dir")" = arming ] || fail "session A's claim was no longer open before B fired"
+  # Session B takes the lock (run_autoarm records its own harness) and stops.
+  b_out=$(run_autoarm "$dir" 2>/dev/null); b_status=$?
+  expect_code 2 "$b_status" "the lock's new session must arm and translate its own close instead of deferring to a gone session's claim"
+  assert_contains "$b_out" "firstmate watcher wake" "the new session's own generation must carry the rewake banner"
+  [ "$(epoch_field "$dir" epoch)" = 2 ] || fail "the new session did not take the next generation: $(sed -n '1p' "$dir/state/.claude-autoarm-epoch")"
+  [ "$(epoch_outcome "$dir")" = rewake ] || fail "the new session's rewake outcome was not recorded: $(epoch_outcome "$dir")"
+  count=$(wc -l < "$dir/state/arm-ran" | tr -d ' ')
+  [ "$count" -eq 2 ] || fail "expected session A's arm and the new session's arm, saw $count"
+  i=0
+  while kill -0 "$a_hook" 2>/dev/null; do
+    [ "$i" -lt 150 ] || fail "session A's orphaned hook never finished"
+    sleep 0.1
+    i=$((i + 1))
+  done
+  [ ! -s "$a_out" ] || fail "session A's orphaned hook emitted after losing its generation: $(cat "$a_out")"
+  [ "$(epoch_field "$dir" epoch)" = 2 ] || fail "session A's orphaned hook rewrote the new session's ledger entry"
+  pass "auto-arm: a claim left armed by a gone session never defers the lock's new session"
 }
 
 test_need_vanished_mid_cycle_closes_quietly() {
@@ -1748,6 +1850,7 @@ test_stuck_generation_claim_is_superseded_and_rearms
 test_identityless_ledger_never_defers
 test_superseded_owner_never_reinvokes_the_arm
 test_superseded_owner_goes_silent_and_never_double_translates
+test_claim_left_by_a_gone_session_never_defers_the_new_session
 test_need_vanished_mid_cycle_closes_quietly
 test_afk_mid_cycle_suppresses_rewake
 test_active_in_marked_secondmate_home

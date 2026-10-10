@@ -27,7 +27,8 @@
 #   - Single-flight: Claude does not dedupe async hooks, so exactly one
 #     GENERATION owner arms per event epoch: the epoch ledger's monotonic
 #     sequence is the claim generation, every firing defers (exit 0) to a live
-#     open claim, and a stuck, dead, identity-mismatched, or finished claim is
+#     open claim, and a stuck, dead, identity-mismatched, or finished claim, or
+#     one taken under another session lock, is
 #     superseded by taking the next generation instead of being unlocked or
 #     revoked. No mutex is ever held across arming or output - the owner lock
 #     survives only as the micro-mutex serializing individual ledger writes -
@@ -255,6 +256,13 @@ if [ "$CLAIM_RC" -ne 0 ]; then
 fi
 MY_GEN=$FM_AUTOARM_MY_GEN
 [ -n "$MY_GEN" ] || exit 0
+# The claim recorded whichever session lock it read; if another session took
+# the lock after the identity check above, the claim would defer that
+# session's own Stops, so it closes again before arming anything.
+if ! fm_session_lock_owned_by_self "$STATE"; then
+  fm_autoarm_write_owned "$STATE" "$MY_GEN" clean >/dev/null 2>&1 || true
+  exit 0
+fi
 
 # Commit <outcome> (optionally with the once-per-episode notice marker) for
 # this generation. Success means this generation's translation WINS and the
