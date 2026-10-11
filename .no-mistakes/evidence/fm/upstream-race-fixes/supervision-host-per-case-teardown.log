@@ -1,0 +1,24 @@
+=== base 09:50:20
+ok - host: an attended wake the branch may take is handled on the engine, and its routine outcome never wakes main
+probe: after test_attended_routine_wake_is_handled_on_the_engine_and_stays_off_main -> 5 live fixture processes
+ok - host: a main-only pass-through leaves the successor watcher running and the close undelivered for main
+probe: after test_main_only_pass_through_leaves_the_successor_watcher_running -> 8 live fixture processes
+ok - host: an away wake is handled on the engine through the branch contract and never reaches main
+probe: after test_away_wake_is_handled_on_the_engine_and_never_reaches_main -> 9 live fixture processes
+ok - host+hook: the next park takes over the cycle a main-only pass-through left, so one arm owns it
+probe: after test_next_park_takes_over_the_cycle_a_pass_through_left_for_main -> 11 live fixture processes
+ok - host: two engine errors latch the session, main keeps every away wake in the cooldown, a failed probe doubles it up to its cap, and a report recovers it silently
+probe: after test_latch_trips_after_two_engine_errors_then_probes_and_recovers -> 17 live fixture processes
+=== base exit 0 in 56s
+=== target 09:51:16
+ok - host: an attended wake the branch may take is handled on the engine, and its routine outcome never wakes main
+probe: after test_attended_routine_wake_is_handled_on_the_engine_and_stays_off_main -> 0 live fixture processes
+ok - host: a main-only pass-through leaves the successor watcher running and the close undelivered for main
+probe: after test_main_only_pass_through_leaves_the_successor_watcher_running -> 2 live fixture processes
+ok - host: an away wake is handled on the engine through the branch contract and never reaches main
+probe: after test_away_wake_is_handled_on_the_engine_and_never_reaches_main -> 0 live fixture processes
+ok - host+hook: the next park takes over the cycle a main-only pass-through left, so one arm owns it
+probe: after test_next_park_takes_over_the_cycle_a_pass_through_left_for_main -> 1 live fixture processes
+ok - host: two engine errors latch the session, main keeps every away wake in the cooldown, a failed probe doubles it up to its cap, and a report recovers it silently
+probe: after test_latch_trips_after_two_engine_errors_then_probes_and_recovers -> 0 live fixture processes
+=== target exit 0 in 56s
