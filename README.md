@@ -1,3 +1,7 @@
+> **Fork notice:** this is [jroethel/firstmate](https://github.com/jroethel/firstmate), a public fork of [kunchenguid/firstmate](https://github.com/kunchenguid/firstmate) that carries a few changes ahead of upstream.
+> What differs, why, and whether each change was offered upstream is recorded in [docs/jr-fm-drift.md](docs/jr-fm-drift.md).
+> The install steps below clone upstream; to install this fork, clone `https://github.com/jroethel/firstmate.git` instead.
+
 <h1 align="center">firstmate</h1>
 <p align="center">
   <a
