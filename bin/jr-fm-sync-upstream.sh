@@ -71,15 +71,20 @@ git merge-base --is-ancestor upstream/main HEAD || die "$cur does not contain up
 # branch's starting point) and upstream, plus each one's own test.
 base=$(git merge-base origin/main upstream/main)
 overlap=$(comm -12 <(git diff --name-only "$base" origin/main | sort) <(git diff --name-only "$base" upstream/main | sort))
-tests=() excl=()
+tests=() excl=() unmapped=()
 for f in $overlap; do
   case "$f" in
     tests/*.test.sh) t=$f ;;
+    bin/backends/*.sh) t=tests/fm-backend-$(basename "$f" .sh).test.sh ;;
     bin/*.sh) t=tests/$(basename "$f" .sh).test.sh ;;
     *) continue ;;
   esac
-  [ -f "$t" ] && tests+=("$t")
+  if [ -f "$t" ]; then tests+=("$t")
+  # a backend with no test must not pass as "zero tests ran"
+  else case "$f" in bin/backends/*) unmapped+=("$f (expected $t)") ;; esac
+  fi
 done
+[ "${#unmapped[@]}" -eq 0 ] || die "changed on both sides but maps to no test: ${unmapped[*]}"
 echo "files both sides changed: ${overlap:-none}"
 bash bin/fm-doc-audience-check.sh
 bash bin/fm-lint.sh
